@@ -10,7 +10,8 @@ interpolant choices, etc.
 """
 import numpy as np
 
-
+#class to evaluate an adaptive interpolant that has different
+#coefficients on different ranges
 class Approximator(object):
 
     def __init__(self, array, interp_choice, order):
@@ -22,18 +23,31 @@ class Approximator(object):
         #interpolant choice, and the order of the interpolant used
         self.basis= interp_choice
         self.order = order
-        for i in self.ranges:
-            print(i[1] - i[0])
+        print()
+        print(len(self.ranges))
+        #for i in self.ranges:
+            #print(i[1] - i[0])
 
+    #function to evaluate the legendre polynomials
     def Legendre(self, n, x):
-        if n > 1:
-            return ((2*n-1)*x*self.Legendre(n-1, x) - (n-1)*self.Legendre(n-2, x))*(1./n)
         if n == 0:
             return 1
-        if n == 1:
+        elif n == 1:
             return x
-            
+        elif n > 1:
+            return ((2*n-1)*x*self.Legendre(n-1, x) - (n-1)*self.Legendre(n-2, x))*(1./n)
+
+    #function to evaluate the chebyshev polynomials 
+    def Chebyshev(self, n, x):
+        if n == 0:
+            return 1.
+        elif n == 1:
+            return x
+        elif n > 1:
+            return 2*x*self.Chebyshev(n-1, x) - self.Chebyshev(n-2, x)
     
+    #given a number/array and order the function evaluates it
+    #based on the interpolant being used
     def basis_function(self, x, order):
         if (self.basis == 'sine'):
             if (order % 2) == 1:
@@ -42,6 +56,8 @@ class Approximator(object):
                 return np.cos(order*x)
         elif (self.basis == 'legendre'):
             return self.Legendre(order, x)
+        elif (self.basis == 'chebyshev'):
+            return self.Chebyshev(order, x)
         else:
             return x**order #monomials otherwise
 

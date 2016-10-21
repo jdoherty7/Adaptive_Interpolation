@@ -30,6 +30,14 @@ class Adaptive_Interpolation(object):
         if n == 1:
             return x
 
+    #function to evaluate the chebyshev polynomials 
+    def Chebyshev(self, n, x):
+        if n == 0:
+            return 1.
+        elif n == 1:
+            return x
+        elif n > 1:
+            return 2*x*self.Chebyshev(n-1, x) - self.Chebyshev(n-2, x)
         
     #evaluate the given basis function for whatever order given
     def basis_function(self, x, order):
@@ -40,6 +48,8 @@ class Adaptive_Interpolation(object):
                 return np.cos(order*x)
         elif (self.basis == 'legendre'):
             return self.Legendre(order, x)
+        elif (self.basis == 'chebyshev'):
+            return self.Chebyshev(order, x)
         else:
             return x**order #monomials otherwise
 
@@ -63,18 +73,24 @@ class Adaptive_Interpolation(object):
             my_vals.append(val)
         return np.array(my_vals)
     
+    #gets chebyshev nodes
+    def get_cheb(self, a, b, n):
+         k = np.array(range(1, int(n) + 1)[::-1])
+         nodes = np.cos((2.*k - 1.)*np.pi/(2*int(n)))
+         #change range from -1 to 1 to a to b
+         nodes = (b-a)*.5*(nodes + 1.) + a
+         nodes[0], nodes[-1] = a, b
+         return nodes
 
-
+    #get nodes for interpolation on the interval (a, b)
     def get_nodes(self, a, b):
         #choose nodes that are spaced like the chebyshev nodes
-        if self.node_choice == 'cheb':
-            k = np.array(range(1, self.order + 1)[::-1])
-            nodes = np.cos((2.*k - 1.)*np.pi/(2*self.order))
-            #change range from -1 to 1 to a to b
-            nodes = (b-a)*.5*(nodes + 1.) + a
-        #choose nodes as random, normally distributed points in the interval
+        if self.node_choice == 'chebyshev':
+            nodes = self.get_cheb(a, b, self.order)
+        #choose nodes at random
+        #beta function is used to prefer points near edges
         elif self.node_choice == 'random':
-            nodes = (b-a)*np.random.randn(self.order) + a
+            nodes = (b-a)*np.random.beta(.5, .5, self.order) + a
         #otherwise, create equispaced nodes
         else:
             nodes = np.linspace(a, b, self.order, endpoint=True)
@@ -95,14 +111,20 @@ class Adaptive_Interpolation(object):
     
         
     def Find_Error(self, coeff, a, b):
-        #evaluate for 500 points in each unit. Its ok if this
-        #find error function is greedy. An accurate error estimate
-        #is more important here
-        eval_points = np.linspace(a, b, 1000./self.allowed_error)
+        #the number of points used to check the error influence what the
+        #actual error will end up being more than the parameter.
+        #it also greatly affects run time
+        eval_points = np.linspace(a, b, abs(b-a)*1e0/self.allowed_error)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points)
         #find maximum relative error in the given interval
-        max_error = max(abs((actual - approx)/actual))
+        #this makes errors work... not la.norm though...
+        #changing eval points affects it too, more is better
+        #max_error = max(abs((actual - approx)/actual))
+        #max_error = np.max(np.abs((actual - approx)/np.abs(actual)))
+        #should error be defined this way, so that you get one value on the
+        #entire interval, or like the way above
+        max_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
         return max_error
 
     
@@ -110,7 +132,7 @@ class Adaptive_Interpolation(object):
     def adapt(self, a, b):
         #get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b)
-        print(nodes)
+        #print(nodes)
         #get coefficients of interpolant defined on the nodes
         coeff = self.interpolate(nodes)
         #append the coefficients and the range they are valid on to this array
@@ -119,7 +141,7 @@ class Adaptive_Interpolation(object):
         #for index in range(len(errors)):
         #calculate the maximum relative error on the interval using these coefficients
         this_error = self.Find_Error(coeff, a, b)
-        print(this_error)
+        #print(this_error)
         #if error is larger than maximum allowed relative error then refine the interval
         if (this_error > self.allowed_error):
             #delete the parent array, which should be last added, because
@@ -139,11 +161,4 @@ class Adaptive_Interpolation(object):
 def adaptive(function, lower_bound, upper_bound, error, node_choice, order, interpolant_choice):
     my_adapt = Adaptive_Interpolation(function, error, [lower_bound, upper_bound], order, node_choice, interpolant_choice) 
     array = my_adapt.Adapt()
-    print('array', array)
     return array
-
-def f(x):
-    return spec.jn(0, x)
-
-#adaptive(f, 1, 3, 1e-4, 'cheb', 3, 'monomials')
-#print np.array([1,2,3])/np.array([1,2,3])

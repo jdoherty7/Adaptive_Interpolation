@@ -3,11 +3,14 @@ Script used to test the adaptive interpolation and
 the evaluation of said interpolant
 """
 import time
+import generate_C
 import numpy as np
 import adapt2 as adapt
+import numpy.linalg as la
 import scipy.special as spec
 import approximator as approx
 import matplotlib.pyplot as plt
+
 
 
 def f(x):
@@ -15,7 +18,7 @@ def f(x):
     #it takes 40s to graph n =20 with 5e5 points
 
 
-def my_plot(x, actual, approximation, abs_errors, err):
+def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     plt.figure()
     plt.title('Actual and Approximate values Graphed')
     plt.plot(x, actual, 'r')
@@ -25,11 +28,11 @@ def my_plot(x, actual, approximation, abs_errors, err):
     plt.title('Absolute Error in Interpolated Values')
     plt.plot(x, abs_errors, 'gs')
 
-    plt.figure()
-    plt.title('Relative Error in Interpolated Values')
-    plt.plot(x, x*0+err, 'r')
-    plt.yscale('log')
-    plt.plot(x, abs(abs_errors/actual), 'bs')
+    #plt.figure()
+    #plt.title('Relative Error in Interpolated Values')
+    #plt.plot(x, x*0+err, 'r')
+    #plt.yscale('log')
+    #plt.plot(x, rel_errors, 'bs')
 
     plt.show()
     
@@ -40,7 +43,7 @@ def Main(choice, order, int_c):
     #interpolant parameters
     a = 120         #lower bound of evaluation interval
     b = 140         #upper bound of interval
-    err = 1e0     #maximum error allowed in the approximation
+    err = 1e-3     #maximum error allowed in the approximation
     nt = choice    #node type used random and cheb are options, otherwise equispaced is used
     order = order     #order of the monomial interpolant to be used
     interp_choice = int_c #sine, legendre, or monomials
@@ -59,6 +62,9 @@ def Main(choice, order, int_c):
     #print "Evaluating"
     #print
     #evaluate the interpolated approximation on values in x
+
+    #print(generate_C.generate_srting(my_approximation))    
+    
     x = np.linspace(a, b, 1e4)
     start = time.time()
     estimated_values = my_approximation.evaluate(x)
@@ -69,14 +75,15 @@ def Main(choice, order, int_c):
     start = time.time()
     actual_values = f(x)
     their_time = time.time() - start
-    abs_errors = abs(actual_values - estimated_values)
+    abs_errors = np.abs(actual_values - estimated_values)
+    rel_error  = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
+    
+    max_abs_error = np.max(abs_errors)
+    avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
+    #max_rel_error = np.max(rel_errors)
+    #avg_rel_error = np.sum(rel_errors)/(len(abs_errors))
 
-    max_abs_error = max(abs_errors)
-    avg_abs_error = sum(abs_errors)/(len(abs_errors))
-    max_rel_error = max(abs_errors/abs(actual_values))
-    avg_rel_error = sum(abs_errors/abs(actual_values))/(len(abs_errors))
-
-    """
+    
     print()
     print(order, nt)
     print()
@@ -89,18 +96,19 @@ def Main(choice, order, int_c):
     print("----------------ERRORS---------------------------------")
     print("Maximum absolute error: ", max_abs_error)
     print("Average absolute error: ", avg_abs_error)
-    print("Maximum relative error: ", max_rel_error)
-    print("Average relative error: ", avg_rel_error)
+    print("Maximum relative error: ", rel_error)
+    #print("Average relative error: ", avg_rel_error)
     print()
     
-    my_plot(x, actual_values, estimated_values, abs_errors, err)
-    """
-    return [max_abs_error, avg_abs_error, max_rel_error, avg_rel_error, eval_time]
+    my_plot(x, actual_values, estimated_values, abs_errors, rel_errors, err)
+    
+    return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
 #run the main program
 if __name__ == "__main__":
-    my_dict = {}
-    for choice in ['cheb', 'random', 'equi']:
-        for j in range(3,5):
-            for interpolant in ['monomials', 'legendre']:
-                my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
+    #for choice in ['chebyshev', 'random', 'equispaced']:
+    for choice in ['equi']:
+        for j in [5]:
+            for interpolant in [ 'monomials']:
+                #my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
+                Main(choice , j, interpolant)
