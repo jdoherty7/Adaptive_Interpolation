@@ -1,6 +1,8 @@
 """
 Script used to test the adaptive interpolation and
 the evaluation of said interpolant
+
+This is now faster than default bessel approximation!
 """
 import time
 import generate_C
@@ -41,9 +43,9 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
 
 def Main(choice, order, int_c):
     #interpolant parameters
-    a = 120         #lower bound of evaluation interval
-    b = 140         #upper bound of interval
-    err = 1e-3     #maximum error allowed in the approximation
+    a = 90         #lower bound of evaluation interval
+    b = 100         #upper bound of interval
+    err = 1e-1     #maximum error allowed in the approximation
     nt = choice    #node type used random and cheb are options, otherwise equispaced is used
     order = order     #order of the monomial interpolant to be used
     interp_choice = int_c #sine, legendre, or monomials
@@ -63,11 +65,15 @@ def Main(choice, order, int_c):
     #print
     #evaluate the interpolated approximation on values in x
 
-    #print(generate_C.generate_srting(my_approximation))    
-    
-    x = np.linspace(a, b, 1e4)
+    size = 1e4
+    x = np.linspace(a, b, size).astype(np.float32)
+
     start = time.time()
-    estimated_values = my_approximation.evaluate(x)
+    code = generate_C.generate_srting(size, my_approximation)
+    print(code)
+    estimated_values = generate_C.Run_C(x, code) 
+    print(estimated_values)
+    #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
     
 
@@ -100,15 +106,15 @@ def Main(choice, order, int_c):
     #print("Average relative error: ", avg_rel_error)
     print()
     
-    my_plot(x, actual_values, estimated_values, abs_errors, rel_errors, err)
+    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
     
     return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
 #run the main program
 if __name__ == "__main__":
     #for choice in ['chebyshev', 'random', 'equispaced']:
-    for choice in ['equi']:
-        for j in [5]:
+    for choice in ['cheb']:
+        for j in [3]:
             for interpolant in [ 'monomials']:
                 #my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
                 Main(choice , j, interpolant)
