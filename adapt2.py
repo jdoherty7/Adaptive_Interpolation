@@ -5,7 +5,6 @@ New adaptive interpolation with better adaptive method
 
 import numpy as np
 import numpy.linalg as la
-import scipy.special as spec
 
 
 class Adaptive_Interpolation(object):
@@ -114,7 +113,7 @@ class Adaptive_Interpolation(object):
         #the number of points used to check the error influence what the
         #actual error will end up being more than the parameter.
         #it also greatly affects run time
-        eval_points = np.linspace(a, b, abs(b-a)*1e0/self.allowed_error)
+        eval_points = np.linspace(a, b, abs(b-a)*1e1/self.allowed_error)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points)
         #find maximum relative error in the given interval

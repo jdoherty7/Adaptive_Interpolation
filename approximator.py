@@ -8,6 +8,7 @@ of simpleAdapt.py
 Will also easily implement different node choices,
 interpolant choices, etc.
 """
+
 import numpy as np
 
 #class to evaluate an adaptive interpolant that has different
@@ -17,16 +18,26 @@ class Approximator(object):
     def __init__(self, array, interp_choice, order):
         #raw array data from adaptive interpolation method
         self.array = array
+        self.range_tree = []
         #matrices of coefficients and the ranges they are valid on
         self.coeff, self.ranges = self.make_coeff()
         #the properties of the interpolant used, such as the
         #interpolant choice, and the order of the interpolant used
         self.basis= interp_choice
         self.order = order
-        print()
-        print(len(self.ranges))
-        #for i in self.ranges:
-            #print(i[1] - i[0])
+        print("number of sub-intervals", len(self.ranges))
+
+    #start of range tree method to make nested if statements possible
+    def make_range_tree(self):
+        for i in range(len(self.array)):
+            interval =  self.array[i][1]
+            priority = interval[1] - interval[0]
+            midpoint = (interval[0] + interval[1])/2.
+            self.range_tree.append(priority, midpoint, i, interval)
+            #sort by the midpoint of the intervals
+            self.range_tree.sort(key=lambda x: x[1])
+            
+            
 
     #function to evaluate the legendre polynomials
     def Legendre(self, n, x):
@@ -61,17 +72,19 @@ class Approximator(object):
         else:
             return x**order #monomials otherwise
 
-
+    #make array of coefficients from the given array
     def make_coeff(self):
-        coeff  = []
-        ranges = []
+        coeff, ranges  = [], []
+        #make the subintervals not overlap
         self.change_ranges()
         for i in range(len(self.array)):
             coeff.append(self.array[i][0])
             ranges.append(self.array[i][1])
         return self.organize(coeff, ranges)
 
-        
+    #make the subintervals not overlap. If there is a smaller subinterval
+    #then that is the used interval
+    #this is unnecessary with current adaptive method
     def change_ranges(self):
         #change lower bounds into respective ranges
         for i in range(len(self.array)):
@@ -94,9 +107,7 @@ class Approximator(object):
 
     #organize the coefficients and range arrays so they are in order
     def organize(self, coefficients, ranges):
-        new_ranges   = []
-        new_coeff    = []
-        used_indices = []
+        new_ranges, new_coeff, used_indices = [], [], []
         for i in range(len(ranges)):
             min_number = 1e9
             min_index  = 0

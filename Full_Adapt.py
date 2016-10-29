@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 
 def f(x):
-    return spec.jn(10, x)
+    return spec.jn(0, x)
     #it takes 40s to graph n =20 with 5e5 points
 
 
@@ -43,9 +43,9 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
 
 def Main(choice, order, int_c):
     #interpolant parameters
-    a = 90         #lower bound of evaluation interval
-    b = 100         #upper bound of interval
-    err = 1e-1     #maximum error allowed in the approximation
+    a = 10         #lower bound of evaluation interval
+    b = 11         #upper bound of interval
+    err = 1e-3     #maximum error allowed in the approximation
     nt = choice    #node type used random and cheb are options, otherwise equispaced is used
     order = order     #order of the monomial interpolant to be used
     interp_choice = int_c #sine, legendre, or monomials
@@ -65,14 +65,12 @@ def Main(choice, order, int_c):
     #print
     #evaluate the interpolated approximation on values in x
 
-    size = 1e4
+    size = 1e6
     x = np.linspace(a, b, size).astype(np.float32)
 
     start = time.time()
-    code = generate_C.generate_srting(size, my_approximation)
-    print(code)
+    code = generate_C.generate_string(size, my_approximation)
     estimated_values = generate_C.Run_C(x, code) 
-    print(estimated_values)
     #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
     
