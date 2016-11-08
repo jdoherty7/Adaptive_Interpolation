@@ -19,6 +19,25 @@ def f(x):
     return spec.jn(0, x)
     #it takes 40s to graph n =20 with 5e5 points
 
+def f1(x0):
+    xs = []
+    for x in x0:
+        if x < 1:
+            xs.append(1 + x)
+        elif (1 <= x) and (x < 2.02):
+            xs.append(1 + x**2)
+        elif (2.02 <= x) and (x < 3.5):
+            xs.append(-3*np.log(x))
+        elif (3.5 <= x) and (x < 4.4):
+            xs.append(np.exp(np.sqrt(x)))
+        elif (4.4 <= x) and (x < 7.001):
+            xs.append(3)
+        elif (7.001 <= x) and (x < 9.306):
+            xs.append(np.sqrt(x**4.4) / 100.)
+        elif (9.306 <= x) and (x <= 11):
+            xs.append(x - 3)
+    return np.array(xs)
+
 
 def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     plt.figure()
@@ -27,6 +46,7 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     plt.plot(x, approximation, 'b')
 
     plt.figure()
+    plt.yscale('log')
     plt.title('Absolute Error in Interpolated Values')
     plt.plot(x, abs_errors, 'gs')
 
@@ -35,7 +55,6 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     #plt.plot(x, x*0+err, 'r')
     #plt.yscale('log')
     #plt.plot(x, rel_errors, 'bs')
-
     plt.show()
     
     
@@ -43,12 +62,12 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
 
 def Main(choice, order, int_c):
     #interpolant parameters
-    a = 10         #lower bound of evaluation interval
-    b = 11         #upper bound of interval
-    err = 1e-3     #maximum error allowed in the approximation
-    nt = choice    #node type used random and cheb are options, otherwise equispaced is used
+    a = 0        #lower bound of evaluation interval
+    b = 10       #upper bound of interval
+    err = 1e-4   #maximum error allowed in the approximation
+    nt = choice  #node type used random and cheb are options, otherwise equispaced is used
     order = order     #order of the monomial interpolant to be used
-    interp_choice = int_c #sine, legendre, or monomials
+    interp_choice = int_c #sine, chebyshev, legendre, or monomials
     
     
     start = time.time()
@@ -61,13 +80,12 @@ def Main(choice, order, int_c):
     print("Building Approximator")
     my_approximation = approx.Approximator(raw_interpolant_data, interp_choice, order)
     setup_time = time.time() - start
-    #print "Evaluating"
-    #print
+
     #evaluate the interpolated approximation on values in x
 
-    size = 1e6
+    size = 1e4
     x = np.linspace(a, b, size).astype(np.float32)
-
+    print("Evaluating the Function")
     start = time.time()
     code = generate_C.generate_string(size, my_approximation)
     estimated_values = generate_C.Run_C(x, code) 
@@ -111,8 +129,15 @@ def Main(choice, order, int_c):
 #run the main program
 if __name__ == "__main__":
     #for choice in ['chebyshev', 'random', 'equispaced']:
-    for choice in ['cheb']:
-        for j in [3]:
-            for interpolant in [ 'monomials']:
+    """
+    file = open("performance.txt", 'w')
+    run_time_list = []
+    for choice in ['chebyshev', 'random']:
+        for j in [3, 4, 5, 6]:
+            for interpolant in [ 'monomials', 'legendre', 'chebyshev']:
+                file.write(choice + " " + str(j) + " " + interpolant + " " + str(Main(choice , j, interpolant)))
                 #my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
-                Main(choice , j, interpolant)
+    """
+    for choice in ['chebyshev']:#, 'legendre', 'monomials']:
+        Main('monomials' , 7, choice)
+    #read out the performances of everything

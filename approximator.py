@@ -15,17 +15,24 @@ import numpy as np
 #coefficients on different ranges
 class Approximator(object):
 
+
     def __init__(self, array, interp_choice, order):
         #raw array data from adaptive interpolation method
         self.array = array
         self.range_tree = []
         #matrices of coefficients and the ranges they are valid on
+        self.orders, self.bases = [], []
         self.coeff, self.ranges = self.make_coeff()
         #the properties of the interpolant used, such as the
         #interpolant choice, and the order of the interpolant used
         self.basis= interp_choice
         self.order = order
         print("number of sub-intervals", len(self.ranges))
+        for i in range(5):
+            print(self.basis_coefficient(i, 'legendre'))
+        for i in range(5):
+            print(self.basis_function(1., order, 'legendre'))
+
 
     #start of range tree method to make nested if statements possible
     def make_range_tree(self):
@@ -42,7 +49,7 @@ class Approximator(object):
     #function to evaluate the legendre polynomials
     def Legendre(self, n, x):
         if n == 0:
-            return 1
+            return 1.
         elif n == 1:
             return x
         elif n > 1:
@@ -59,18 +66,26 @@ class Approximator(object):
     
     #given a number/array and order the function evaluates it
     #based on the interpolant being used
-    def basis_function(self, x, order):
-        if (self.basis == 'sine'):
+    def basis_function(self, x, order, basis):
+        if (basis == 'sine'):
             if (order % 2) == 1:
                 return np.sin(order*x)
             else:
                 return np.cos(order*x)
-        elif (self.basis == 'legendre'):
+        elif (basis == 'legendre'):
             return self.Legendre(order, x)
-        elif (self.basis == 'chebyshev'):
+        elif (basis == 'chebyshev'):
             return self.Chebyshev(order, x)
         else:
             return x**order #monomials otherwise
+    
+    
+    def basis_coefficient(self, order, basis):
+        if order > 0:
+            return self.basis_function(1., order, basis) - self.basis_function(1., order-1, basis)
+        else:
+            return self.basis_function(1., order, basis)
+
 
     #make array of coefficients from the given array
     def make_coeff(self):
@@ -80,7 +95,10 @@ class Approximator(object):
         for i in range(len(self.array)):
             coeff.append(self.array[i][0])
             ranges.append(self.array[i][1])
+            self.orders.append(self.array[i][2])
+            self.bases.append(self.array[i][3])
         return self.organize(coeff, ranges)
+
 
     #make the subintervals not overlap. If there is a smaller subinterval
     #then that is the used interval
@@ -108,6 +126,7 @@ class Approximator(object):
     #organize the coefficients and range arrays so they are in order
     def organize(self, coefficients, ranges):
         new_ranges, new_coeff, used_indices = [], [], []
+        new_bases, new_orders = [], []
         for i in range(len(ranges)):
             min_number = 1e9
             min_index  = 0
@@ -118,6 +137,10 @@ class Approximator(object):
             used_indices.append(min_index)
             new_ranges.append(ranges[min_index])
             new_coeff.append(coefficients[min_index])
+            new_bases.append(self.bases[min_index])
+            new_orders.append(self.orders[min_index])
+        self.bases = new_bases
+        self.orders = new_orders
         return new_coeff, new_ranges
 
 
@@ -150,7 +173,7 @@ class Approximator(object):
                 #print index,' / ',len(self.ranges) 
             #make xs in the monomial series for evaluation
             #print len(self.coeff), index, x0, self.ranges[index][1], self.in_current_range(x0, index)
-            xs = np.array([self.basis_function(x0, i) for i in range(self.order)])
+            xs = np.array([self.basis_function(x0, i, self.bases[index]) for i in range(self.orders[index]+1)])
             #multiply the calculated monomials by their coefficients
             #that are givent for the calculated array
             val = np.dot(np.array(self.coeff[index]), xs)

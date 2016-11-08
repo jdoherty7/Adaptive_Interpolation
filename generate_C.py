@@ -18,6 +18,7 @@ import pyopencl.array as cl_array
 #output is C code.
 
 
+
 #first do simple thing
 #make if statements for all ranges and evaluate them for just monomials
 #doing this with a string.
@@ -31,14 +32,18 @@ def generate_string(domain_size, ap):
         string += "if (({0} <= curr) && (curr <= {1}))".format(ap.ranges[i][0], ap.ranges[i][1])
         string += "{ "
         string += "y[n] = "
-        for j in range(ap.order):
+        sub_string = "0"
+        for j in range(ap.orders[i])[::-1]:
             #power function is defined outside of __kernal in Run_C
-            string += "{0}*power(curr, {1})".format(ap.coeff[i][j], j)
-            if j != ap.order-1:
-                string += " + "
+            #string += "{0}*power(curr, {1})".format(ap.coeff[i][j], j)
+            #using horner's method, this requires the for loop to be reversed
+            sub_string = "curr*(" + sub_string + ") + {0}".format(ap.coeff[i][j])
+            #if j != ap.order-1:
+                #string += " + "
+        string += sub_string
         string += ";"
         string += "}"
-    string += "}"        
+    string += "}"    
     return string
 
 #use to save the generated code for later use
