@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 
 
 def f(x):
-    return spec.jn(0, x)
+    #return spec.jn(0, x)
+    return x**2. - 10.*x**1 + 25.*x**0
     #it takes 40s to graph n =20 with 5e5 points
 
 def f1(x0):
@@ -60,11 +61,11 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     
     
 
-def Main(choice, order, int_c):
+def Testing(choice, order, int_c):
     #interpolant parameters
     a = 0        #lower bound of evaluation interval
     b = 10       #upper bound of interval
-    err = 1e-4   #maximum error allowed in the approximation
+    err = 1e-2   #maximum error allowed in the approximation
     nt = choice  #node type used random and cheb are options, otherwise equispaced is used
     order = order     #order of the monomial interpolant to be used
     interp_choice = int_c #sine, chebyshev, legendre, or monomials
@@ -83,12 +84,13 @@ def Main(choice, order, int_c):
 
     #evaluate the interpolated approximation on values in x
 
-    size = 1e4
+    size = 1e1
     x = np.linspace(a, b, size).astype(np.float32)
     print("Evaluating the Function")
     start = time.time()
     code = generate_C.generate_string(size, my_approximation)
-    estimated_values = generate_C.Run_C(x, code) 
+    estimated_values = generate_C.Run_C(x, code)
+    print( estimated_values)
     #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
     
@@ -139,5 +141,5 @@ if __name__ == "__main__":
                 #my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
     """
     for choice in ['chebyshev']:#, 'legendre', 'monomials']:
-        Main('monomials' , 7, choice)
+        Testing('monomials', 15, choice)
     #read out the performances of everything

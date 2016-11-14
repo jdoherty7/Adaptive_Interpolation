@@ -11,7 +11,7 @@ class Adaptive_Interpolation(object):
 
     def __init__(self, f, error, interval, order, node_choice, interpolant_choice):
         #defining parameters of an adaptive method
-        self.function      = f #function pass
+        self.function      = f #function pass, must be vectorized
         self.lower_bound   = interval[0]
         self.upper_bound   = interval[1]
         self.max_order     = order #integer
@@ -23,12 +23,11 @@ class Adaptive_Interpolation(object):
 
     def Legendre(self, n, x):
         if n == 0:
-            return 1
+            return 1.
         elif n == 1:
             return x
         elif n > 1:
             return ((2*n-1)*x*self.Legendre(n-1, x) - (n-1)*self.Legendre(n-2, x))*(1./n)
-
 
     #function to evaluate the chebyshev polynomials 
     def Chebyshev(self, n, x):
@@ -37,7 +36,7 @@ class Adaptive_Interpolation(object):
         elif n == 1:
             return x
         elif n > 1:
-            return 2*x*self.Chebyshev(n-1, x) - self.Chebyshev(n-2, x)
+            return 2.*x*self.Chebyshev(n-1, x) - self.Chebyshev(n-2, x)
         
     #evaluate the given basis function for whatever order given
     def basis_function(self, x, order, basis):
@@ -53,19 +52,12 @@ class Adaptive_Interpolation(object):
         else:
             return x**order #monomials otherwise
 
-
     #given a list of coefficients, evaluate what the interpolant's value
-    #will for the given x value(s)
+    #will be for the given x value(s). Assumes that x is an array
     def eval_coeff(self, coeff, x, basis, order):
         my_vals = []
-        if type(x) != int:
-            #evaluating for an array
-            for x0 in x:
-                xs = np.array([self.basis_function(x0, i, basis) for i in range(order+1)])
-                val = np.dot(coeff, xs)
-                my_vals.append(val)
-        else:
-            xs = np.array([self.basis_function(x, i, basis) for i in range(order+1)])
+        for x0 in x:
+            xs = np.array([self.basis_function(x0, i, basis) for i in range(order+1)])
             val = np.dot(coeff, xs)
             my_vals.append(val)
         return np.array(my_vals)
@@ -73,10 +65,9 @@ class Adaptive_Interpolation(object):
     #gets chebyshev nodes
     def get_cheb(self, a, b, n):
          k = np.array(range(1, int(n) + 1)[::-1])
-         nodes = np.cos((2.*k - 1.)*np.pi/(2*int(n)))
+         nodes = np.cos((2.*k - 2.)*np.pi/(2.*int(n-1)))
          #change range from -1 to 1 to a to b
          nodes = (b-a)*.5*(nodes + 1.) + a
-         nodes[0], nodes[-1] = a, b
          return nodes
 
     #get nodes for interpolation on the interval (a, b)
@@ -89,15 +80,16 @@ class Adaptive_Interpolation(object):
         #beta function is used to prefer points near edges
         elif self.node_choice == 'random':
             nodes = (b-a)*np.random.beta(.5, .5, node_number) + a
+            #make sure endpoints are properly set
+            nodes[0], nodes[-1] = a, b
         #otherwise, create equispaced nodes
         else:
             nodes = np.linspace(a, b, node_number, endpoint=True)
-        #make sure endpoints are properly set
-        nodes[0], nodes[-1] = a, b
         return nodes
 
 
-
+    #find interpolated coefficients given a basis for evaluation and
+    #nodes to evaluate the 
     def interpolate(self, nodes, basis):
         length = len(nodes)
         V = np.outer(np.ones(length), np.ones(length))
@@ -105,8 +97,6 @@ class Adaptive_Interpolation(object):
         for i in range(length):
             for j in range(length):
                 V[i, j] = self.basis_function(nodes[i], j, basis)
-        #print(basis)
-        #print(V)
         coeff = la.solve(V, self.function(nodes))
         return coeff
     
@@ -150,13 +140,14 @@ class Adaptive_Interpolation(object):
         min_error = 1e14
         #check all the interpolant possibillities and orders to find the
         #best one that runs
-        for curr_order in range(self.max_order):
+        for curr_order in range(self.max_order+1):
+            #only the monomial choice can be evaluated in the 
             #for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
-            for choice in ['legendre']:
+            for choice in ['monomials']:#['legendre']:
                 nodes = self.get_nodes(a, b, curr_order)
                 curr_coeff = self.interpolate(nodes, choice)
                 error = self.Find_Error(curr_coeff, a, b, choice, curr_order)
-                #print(error, choice, curr_order)
+                print(error, choice, curr_order)
                 if error < min_error:
                     coeff = curr_coeff
                     min_error = error
@@ -170,51 +161,12 @@ class Adaptive_Interpolation(object):
             #adapt on the left subinterval and right subinterval
             self.order_adapt(a, (a+b)/2.)
             self.order_adapt((a+b)/2., b)
-        else:
-            print(a, b, min_error, basis, order, coeff)
-
-
-    #dynamically change the end interval of the adaptive method so that
-    #the intervals are on ranges that best fit them. This is done in the hopes
-    #that discontinuites may be better avoided. However, it seems that a linear
-    #interpolant in the original method does the same thing but faster and 
-    #more accurately. It may be worth investigating the change of endpoint by means
-    #of the secant method instead of the midpoint method
-    def d_adapt(self, a, b):
-        int_size = b - a
-        tot_interval = 0
-        end = b
-        last_b = a
-        while tot_interval < int_size:
-            #print(a, b, last_b)
-            nodes = self.get_nodes(a, b)
-            coeff = self.interpolate(nodes)
-            self.inter_array.append([coeff, [a,b]])
-            this_error = self.Find_Error(coeff, a, b)
-            #resolution reached, so end loop
-            resolution = 1e-3
-            if abs(b-last_b) < resolution:
-                #print("one")
-                tot_interval += abs(b - a)
-                a = b
-                b = end
-            elif this_error <= self.allowed_error and b == end:
-                tot_interval += abs(b - a)
-            elif this_error > self.allowed_error:
-                del self.inter_array[-1]
-                temp = b
-                a, b = a, b - abs(last_b-b)/2.
-                last_b = temp
-    
-            elif this_error <= self.allowed_error:
-                del self.inter_array[-1]
-                temp = b
-                a , b = a, b + abs(last_b-b)/2.
-                last_b = b
+        #else:
+        #    print(a, b, min_error, basis, order, coeff)
 
 
     def Adapt(self):
-        self.adapt(self.lower_bound, self.upper_bound)
+        self.order_adapt(self.lower_bound, self.upper_bound)
         return self.inter_array
 
 

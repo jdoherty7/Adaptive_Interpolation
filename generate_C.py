@@ -11,6 +11,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 
 import time
+import numpy as np
 import pyopencl as cl
 import pyopencl.array as cl_array
 
@@ -20,58 +21,45 @@ import pyopencl.array as cl_array
 
 
 #first do simple thing
-#make if statements for all ranges and evaluate them for just monomials
+#make if statements for all ranges and eva vluate them for just monomials
 #doing this with a string.
 def generate_string(domain_size, ap):
     string  = ""
-    string += "float curr; "
-    string += "for(int n=0; n<{0}; ++n)".format(int(domain_size))
-    string += " { "
-    string += "curr = x[n];"
+    #string += "for(int n=0; n<{0}; n++)".format(int(domain_size))
+    #string += " { "
+    string += "int n = get_global_id(0); "
     for i in range(len(ap.ranges)):
-        string += "if (({0} <= curr) && (curr <= {1}))".format(ap.ranges[i][0], ap.ranges[i][1])
-        string += "{ "
+        #string += "if (({0} <= x[n]) && (x[n] <= {1})) { ".format(ap.ranges[i][0], ap.ranges[i][1])
         string += "y[n] = "
-        sub_string = "0"
+        sub_string = "{0:.200f}".format(ap.coeff[i][ap.orders[-1]])
         for j in range(ap.orders[i])[::-1]:
-            #power function is defined outside of __kernal in Run_C
-            #string += "{0}*power(curr, {1})".format(ap.coeff[i][j], j)
             #using horner's method, this requires the for loop to be reversed
-            sub_string = "curr*(" + sub_string + ") + {0}".format(ap.coeff[i][j])
-            #if j != ap.order-1:
-                #string += " + "
+            sub_string = "x[n]*(" + sub_string + ") + {0:.200f}".format(ap.coeff[i][j])
         string += sub_string
-        string += ";"
-        string += "}"
-    string += "}"    
+        string += ";" 
+        #string += "}"
+    #string += "}"
+    print(string)
     return string
-
-#use to save the generated code for later use
-def write_to_file(file_name, string):
-    my_file = open("generated_code/"+file_name+".txt", "w")
-    my_file.write(string)
-    my_file.close()
-    
+  
 
 #string is executable c code
 #x is the co-image of function
 def Run_C(x, string):
-    #function for power so as not to use #include<math.h>
-    #power is one line so writing and reading to file is easier
-    power  = "float power(float x, float n) {"
-    power += "    float number = 1;"
-    power += "    for (int i=0; i<n; ++i) {"
-    power += "        number = number*x;"
-    power += "    } return number;}"
+    #if 64 this will not work
+    x = x.astype(np.float32)
 
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
     
     x_dev = cl_array.to_device(queue, x)
     y_dev = cl_array.empty_like(x_dev)
+    
+    #build the code to run from given string
     one = "__kernel void sum(__global float *x,"
     two = " __global float *y) {"
-    code = power + one + two + string + "}"
+    code =  one + two + string + "}"
+
     
     start = time.time()
     prg = cl.Program(ctx, code).build()
@@ -79,6 +67,13 @@ def Run_C(x, string):
     
     prg.sum(queue, (1,), None, x_dev.data, y_dev.data)
     return y_dev.get()
+
+
+#use to save the generated code for later use
+def write_to_file(file_name, string):
+    my_file = open("generated_code/"+file_name+".txt", "w")
+    my_file.write(string)
+    my_file.close()
 
 
 #run the C method from the given file using the given domain 

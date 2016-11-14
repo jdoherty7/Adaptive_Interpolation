@@ -28,11 +28,8 @@ class Approximator(object):
         self.basis= interp_choice
         self.order = order
         print("number of sub-intervals", len(self.ranges))
-        for i in range(5):
-            print(self.basis_coefficient(i, 'legendre'))
-        for i in range(5):
-            print(self.basis_function(1., order, 'legendre'))
-
+        print(self.ranges)
+        print(self.coeff)
 
     #start of range tree method to make nested if statements possible
     def make_range_tree(self):
@@ -43,8 +40,6 @@ class Approximator(object):
             self.range_tree.append(priority, midpoint, i, interval)
             #sort by the midpoint of the intervals
             self.range_tree.sort(key=lambda x: x[1])
-            
-            
 
     #function to evaluate the legendre polynomials
     def Legendre(self, n, x):
@@ -80,13 +75,6 @@ class Approximator(object):
             return x**order #monomials otherwise
     
     
-    def basis_coefficient(self, order, basis):
-        if order > 0:
-            return self.basis_function(1., order, basis) - self.basis_function(1., order-1, basis)
-        else:
-            return self.basis_function(1., order, basis)
-
-
     #make array of coefficients from the given array
     def make_coeff(self):
         coeff, ranges  = [], []
@@ -167,12 +155,9 @@ class Approximator(object):
         for x0 in x:
             #if the number is not in the current range move the
             #range to the next range in the list
-            #if self.in_current_range(x0, index) == False:
             if (self.ranges[index][1] < x0):
                 index += 1
-                #print index,' / ',len(self.ranges) 
             #make xs in the monomial series for evaluation
-            #print len(self.coeff), index, x0, self.ranges[index][1], self.in_current_range(x0, index)
             xs = np.array([self.basis_function(x0, i, self.bases[index]) for i in range(self.orders[index]+1)])
             #multiply the calculated monomials by their coefficients
             #that are givent for the calculated array
