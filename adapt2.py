@@ -107,8 +107,13 @@ class Adaptive_Interpolation(object):
         for i in range(length):
             for j in range(length):
                 V[i, j] = self.basis_function(nodes[i], j, basis)
-        coeff = la.solve(V, self.function(nodes))
-        return coeff
+        try:
+            coeff = la.solve(V, self.function(nodes))
+            return coeff
+        except:
+            # there is a singular matrix probably
+            print(V)
+            return [0]
 
     # find the error of given coefficients on interval a, b
     # with a given order an basis. Finds the relative error
@@ -153,9 +158,12 @@ class Adaptive_Interpolation(object):
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
             # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
-            for choice in ['monomials']:
+            for choice in ['legendre']:
                 nodes = self.get_nodes(a, b, curr_order)
                 curr_coeff = self.interpolate(nodes, choice)
+                # if you get a singular matrix, break the for loop
+                if curr_coeff[0] == 0:
+                    break
                 error = self.Find_Error(curr_coeff, a, b, choice, curr_order)
                 print(error, choice, curr_order)
                 if error < min_error:
@@ -164,15 +172,15 @@ class Adaptive_Interpolation(object):
                     order = curr_order
                     basis = choice
         self.inter_array.append([coeff, [a, b], order, basis])
-        if (min_error > self.allowed_error):
+        if (min_error > self.allowed_error) and (b-a) > 1e-3:
             # delete the parent array, which should be last added, because
             # it is no longer valid, since the interpolation has been refined
             del self.inter_array[-1]
             # adapt on the left subinterval and right subinterval
             self.order_adapt(a, (a+b)/2.)
             self.order_adapt((a+b)/2., b)
-        #else:
-        #    print(a, b, min_error, basis, order, coeff)
+        else:
+            print(a, b, min_error, basis, order, coeff)
 
     # Method to run the adaptive method initially
     def Adapt(self):

@@ -65,17 +65,19 @@ def Testing(choice, order, int_c):
     # upper bound of interval
     b = 10
     # maximum error allowed in the approximation
-    err = 1e-2
+    err = 1e-5
     # node type used random and cheb are options, otherwise equispaced is used
     nt = choice
     # order of the monomial interpolant to be used
     order = order
     # sine, chebyshev, legendre, or monomials
     interp_choice = int_c
+    # function being approximated
+    func = f1
 
     start = time.time()
     print("Start adaptive interpolation")
-    raw_interpolant_data = adapt.adaptive(f, a, b, err, nt, order, interp_choice)
+    raw_interpolant_data = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
     al_time = time.time() - start
 
     #the choice of interpolation is not currently implemented. monomials is default
@@ -85,19 +87,18 @@ def Testing(choice, order, int_c):
     setup_time = time.time() - start
 
     # evaluate the interpolated approximation on values in x
-    size = 1e1
-    x = np.linspace(a, b, size).astype(np.float32)
+    size = 1e5
+    x = np.linspace(a, b, size).astype(np.float64)
     print("Evaluating the Function")
     start = time.time()
-    code = generate_C.generate_string(size, my_approximation)
-    estimated_values = generate_C.Run_C(x, code)
-    print(estimated_values)
-    #estimated_values = my_approximation.evaluate(x)
+    # code = generate_C.generate_string(size, my_approximation)
+    # estimated_values = generate_C.run_c(x, code)
+    estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
     # calculate errors in the approximation and actual values
     start = time.time()
-    actual_values = f(x)
+    actual_values = func(x)
     their_time = time.time() - start
     abs_errors = np.abs(actual_values - estimated_values)
     rel_error = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
@@ -126,4 +127,4 @@ def Testing(choice, order, int_c):
 
 # run the main program
 if __name__ == "__main__":
-    Testing('monomials', 15, 'chebyshev')
+    Testing('legendre', 4, 'chebyshev')

@@ -26,9 +26,9 @@ class Approximator(object):
         # interpolant choice, and the order of the interpolant used
         self.basis = interp_choice
         self.order = order
-        print("number of sub-intervals", len(self.ranges))
-        print(self.ranges)
-        print(self.coeff)
+        # print("number of sub-intervals", len(self.ranges))
+        # print(self.ranges)
+        # print(self.coeff)
 
     # start of range tree method to make nested if statements possible
     def make_range_tree(self):
