@@ -14,12 +14,14 @@ import approximator as approx
 import matplotlib.pyplot as plt
 
 
-
+# bessel function for testing
 def f(x):
     #return spec.jn(0, x)
     return x**2. - 10.*x**1 + 25.*x**0
-    #it takes 40s to graph n =20 with 5e5 points
+    # it takes 40s to graph n =20 with 5e5 points
 
+
+# a function for testing
 def f1(x0):
     xs = []
     for x in x0:
@@ -40,6 +42,7 @@ def f1(x0):
     return np.array(xs)
 
 
+# plot the absolute errors as well as the actual and approximated functions
 def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     plt.figure()
     plt.title('Actual and Approximate values Graphed')
@@ -51,63 +54,57 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
     plt.title('Absolute Error in Interpolated Values')
     plt.plot(x, abs_errors, 'gs')
 
-    #plt.figure()
-    #plt.title('Relative Error in Interpolated Values')
-    #plt.plot(x, x*0+err, 'r')
-    #plt.yscale('log')
-    #plt.plot(x, rel_errors, 'bs')
     plt.show()
-    
-    
-    
 
+
+# Funtion to test the code base
 def Testing(choice, order, int_c):
-    #interpolant parameters
-    a = 0        #lower bound of evaluation interval
-    b = 10       #upper bound of interval
-    err = 1e-2   #maximum error allowed in the approximation
-    nt = choice  #node type used random and cheb are options, otherwise equispaced is used
-    order = order     #order of the monomial interpolant to be used
-    interp_choice = int_c #sine, chebyshev, legendre, or monomials
-    
-    
+    # interpolant parameters
+    # lower bound of evaluation interval
+    a = 0
+    # upper bound of interval
+    b = 10
+    # maximum error allowed in the approximation
+    err = 1e-2
+    # node type used random and cheb are options, otherwise equispaced is used
+    nt = choice
+    # order of the monomial interpolant to be used
+    order = order
+    # sine, chebyshev, legendre, or monomials
+    interp_choice = int_c
+
     start = time.time()
     print("Start adaptive interpolation")
     raw_interpolant_data = adapt.adaptive(f, a, b, err, nt, order, interp_choice)
     al_time = time.time() - start
-    
+
     #the choice of interpolation is not currently implemented. monomials is default
     start = time.time()
     print("Building Approximator")
     my_approximation = approx.Approximator(raw_interpolant_data, interp_choice, order)
     setup_time = time.time() - start
 
-    #evaluate the interpolated approximation on values in x
-
+    # evaluate the interpolated approximation on values in x
     size = 1e1
     x = np.linspace(a, b, size).astype(np.float32)
     print("Evaluating the Function")
     start = time.time()
     code = generate_C.generate_string(size, my_approximation)
     estimated_values = generate_C.Run_C(x, code)
-    print( estimated_values)
+    print(estimated_values)
     #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
-    
 
-    #calculate errors in the approximation and actual values
+    # calculate errors in the approximation and actual values
     start = time.time()
     actual_values = f(x)
     their_time = time.time() - start
     abs_errors = np.abs(actual_values - estimated_values)
-    rel_error  = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
-    
+    rel_error = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
+
     max_abs_error = np.max(abs_errors)
     avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
-    #max_rel_error = np.max(rel_errors)
-    #avg_rel_error = np.sum(rel_errors)/(len(abs_errors))
 
-    
     print()
     print(order, nt)
     print()
@@ -121,25 +118,12 @@ def Testing(choice, order, int_c):
     print("Maximum absolute error: ", max_abs_error)
     print("Average absolute error: ", avg_abs_error)
     print("Maximum relative error: ", rel_error)
-    #print("Average relative error: ", avg_rel_error)
     print()
-    
+
     my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
-    
+
     return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
-#run the main program
+# run the main program
 if __name__ == "__main__":
-    #for choice in ['chebyshev', 'random', 'equispaced']:
-    """
-    file = open("performance.txt", 'w')
-    run_time_list = []
-    for choice in ['chebyshev', 'random']:
-        for j in [3, 4, 5, 6]:
-            for interpolant in [ 'monomials', 'legendre', 'chebyshev']:
-                file.write(choice + " " + str(j) + " " + interpolant + " " + str(Main(choice , j, interpolant)))
-                #my_dict[choice][j][interpolant] = Main(choice , j, interpolant)
-    """
-    for choice in ['chebyshev']:#, 'legendre', 'monomials']:
-        Testing('monomials', 15, choice)
-    #read out the performances of everything
+    Testing('monomials', 15, 'chebyshev')
