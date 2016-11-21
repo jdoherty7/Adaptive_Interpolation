@@ -58,22 +58,20 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
 
 
 # Funtion to test the code base
-def Testing(choice, order, int_c):
+# a is the lower bound and b is the upper bound while func is the function
+# being approximated. Max order is the maximum allowed order of the
+# interpolant while max_error is the maximum relative error allowed 
+# the error is with respect to the infinity norm)
+def Testing(a, b, func, max_order, max_error):
     # interpolant parameters
-    # lower bound of evaluation interval
-    a = 0
-    # upper bound of interval
-    b = 3
     # maximum error allowed in the approximation
-    err = 1e-2
+    err = max_error
     # node type used random and cheb are options, otherwise equispaced is used
-    nt = choice
+    nt = 'chebyshev'
     # order of the monomial interpolant to be used
-    order = order
+    order = max_order
     # sine, chebyshev, legendre, or monomials
-    interp_choice = int_c
-    # function being approximated
-    func = f
+    interp_choice = 'monomials'
 
     start = time.time()
     print("Start adaptive interpolation")
@@ -93,8 +91,8 @@ def Testing(choice, order, int_c):
     start = time.time()
     code = generate_C.generate_code(size, my_approximation)
     print(code)
-    #estimated_values = generate_C.run_c(x, code)
-    estimated_values = my_approximation.evaluate(x)
+    estimated_values = generate_C.run_c(x, code)
+    #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
     # calculate errors in the approximation and actual values
@@ -122,10 +120,10 @@ def Testing(choice, order, int_c):
     print("Maximum relative error: ", rel_error)
     print()
 
-    #my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
+    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
 
     return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
 # run the main program
 if __name__ == "__main__":
-    Testing('chebyshev', 5, 'legendre')
+    Testing(0, 3, f, 5, 1e-2)

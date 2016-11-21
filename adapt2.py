@@ -163,7 +163,7 @@ class Adaptive_Interpolation(object):
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
             # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
-            for choice in ['legendre']:
+            for choice in ['monomials']:
                 nodes = self.get_nodes(a, b, curr_order)
                 curr_coeff = self.interpolate(nodes, choice)
                 # if you get a singular matrix, break the for loop
