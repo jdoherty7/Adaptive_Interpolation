@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 # bessel function for testing
 def f(x):
     #return spec.jn(0, x)
-    return x**2. - 10.*x**1 + 25.*x**0
+    return x**2 - 10.*x**1 + 25.*x**0
     # it takes 40s to graph n =20 with 5e5 points
 
 
@@ -63,9 +63,9 @@ def Testing(choice, order, int_c):
     # lower bound of evaluation interval
     a = 0
     # upper bound of interval
-    b = 10
+    b = 3
     # maximum error allowed in the approximation
-    err = 1e-5
+    err = 1e-2
     # node type used random and cheb are options, otherwise equispaced is used
     nt = choice
     # order of the monomial interpolant to be used
@@ -73,7 +73,7 @@ def Testing(choice, order, int_c):
     # sine, chebyshev, legendre, or monomials
     interp_choice = int_c
     # function being approximated
-    func = f1
+    func = f
 
     start = time.time()
     print("Start adaptive interpolation")
@@ -91,8 +91,9 @@ def Testing(choice, order, int_c):
     x = np.linspace(a, b, size).astype(np.float64)
     print("Evaluating the Function")
     start = time.time()
-    # code = generate_C.generate_string(size, my_approximation)
-    # estimated_values = generate_C.run_c(x, code)
+    code = generate_C.generate_code(size, my_approximation)
+    print(code)
+    #estimated_values = generate_C.run_c(x, code)
     estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
@@ -121,10 +122,10 @@ def Testing(choice, order, int_c):
     print("Maximum relative error: ", rel_error)
     print()
 
-    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
+    #my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
 
     return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
 # run the main program
 if __name__ == "__main__":
-    Testing('legendre', 4, 'chebyshev')
+    Testing('chebyshev', 5, 'legendre')

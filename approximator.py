@@ -41,40 +41,40 @@ class Approximator(object):
             self.range_tree.sort(key=lambda x: x[1])
 
     # function to evaluate the legendre polynomials
-    def Legendre(self, n, x):
+    def legendre(self, n, x):
         if n == 0:
-            return 1.
+            return np.array([1.])
         elif n == 1:
-            return x
+            return np.array([1., x])
         elif n > 1:
-            first_term = (2*n-1)*x*self.Legendre(n-1, x)
-            second_term = (n-1)*self.Legendre(n-2, x)
-            return (first_term - second_term)*(1./n)
+            L = [1., x]
+            for i in range(2, n+1):
+                first_term = (2*i-1)*x*L[i-1]
+                second_term = (i-1)*L[i-2]
+                L.append((first_term + second_term)*(1./n))
+            return np.array(L)
 
-    # function to evaluate the chebyshev polynomials
-    def Chebyshev(self, n, x):
+    def chebyshev(self, n, x):
         if n == 0:
-            return 1.
+            return np.array([1.])
         elif n == 1:
-            return x
+            return np.array([1., x])
         elif n > 1:
-            return 2*x*self.Chebyshev(n-1, x) - self.Chebyshev(n-2, x)
+            C = [1., x]
+            for i in range(2, n+1):
+                C.append(2*x*C[i-1] - C[i-2])
+            return np.array(C)
 
     # given a number/array and order the function evaluates it
     # based on the interpolant being used
     def basis_function(self, x, order, basis):
-        if (basis == 'sine'):
-            if (order % 2) == 1:
-                return np.sin(order*x)
-            else:
-                return np.cos(order*x)
-        elif (basis == 'legendre'):
-            return self.Legendre(order, x)
+        if (basis == 'legendre'):
+            return self.legendre(order, x)
         elif (basis == 'chebyshev'):
-            return self.Chebyshev(order, x)
+            return self.chebyshev(order, x)
         else:
-            # monomials if not specified
-            return x**order
+            # default make monomials the basis
+            return np.array([x**i for i in range(order+1)])
 
     # make array of coefficients from the given array
     def make_coeff(self):
@@ -157,7 +157,7 @@ class Approximator(object):
             if (self.ranges[index][1] < x0):
                 index += 1
             # make xs in the monomial series for evaluation
-            xs = np.array([self.basis_function(x0, i, self.bases[index]) for i in range(self.orders[index]+1)])
+            xs = self.basis_function(x0, self.orders[index], self.bases[index])
             # multiply the calculated monomials by their coefficients
             # that are givent for the calculated array
             val = np.dot(np.array(self.coeff[index]), xs)
