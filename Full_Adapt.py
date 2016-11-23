@@ -16,8 +16,9 @@ import matplotlib.pyplot as plt
 
 # bessel function for testing
 def f(x):
-    #return spec.jn(0, x)
-    return x**2 - 10.*x**1 + 25.*x**0
+    return spec.jn(3, x)
+    #return x**2 - 10.*x**1 + 25.*x**0
+    #return 0 + 0*x + (.5*(3*x**2 - 1))
     # it takes 40s to graph n =20 with 5e5 points
 
 
@@ -85,12 +86,12 @@ def Testing(a, b, func, max_order, max_error):
     setup_time = time.time() - start
 
     # evaluate the interpolated approximation on values in x
-    size = 1e5
+    size = 1e6
     x = np.linspace(a, b, size).astype(np.float64)
     print("Evaluating the Function")
     start = time.time()
     code = generate_C.generate_code(size, my_approximation)
-    print(code)
+    #print(code)
     estimated_values = generate_C.run_c(x, code)
     #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
@@ -126,4 +127,4 @@ def Testing(a, b, func, max_order, max_error):
 
 # run the main program
 if __name__ == "__main__":
-    Testing(0, 3, f, 5, 1e-2)
+    Testing(20, 30, f, 3, 1e-4)

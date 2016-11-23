@@ -107,11 +107,11 @@ class Adaptive_Interpolation(object):
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis)
         try:
-            print(nodes)
-            print(V)
-            print(self.function(nodes))
+            #print(nodes)
+            #print(V)
+            #print(self.function(nodes))
             coeff = la.solve(V, self.function(nodes))
-            print(coeff)
+            #print(coeff)
             return coeff
         except:
             # there is a singular matrix probably
@@ -163,7 +163,7 @@ class Adaptive_Interpolation(object):
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
             # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
-            for choice in ['monomials']:
+            for choice in [self.basis]:
                 nodes = self.get_nodes(a, b, curr_order)
                 curr_coeff = self.interpolate(nodes, choice)
                 # if you get a singular matrix, break the for loop
