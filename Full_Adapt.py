@@ -82,18 +82,18 @@ def Testing(a, b, func, max_order, max_error):
     #the choice of interpolation is not currently implemented. monomials is default
     start = time.time()
     print("Building Approximator")
-    my_approximation = approx.Approximator(raw_interpolant_data, interp_choice, order)
+    my_approximation = approx.Approximator(raw_interpolant_data, order)
     setup_time = time.time() - start
 
     # evaluate the interpolated approximation on values in x
-    size = 1e6
+    size = 1e3
     x = np.linspace(a, b, size).astype(np.float64)
     print("Evaluating the Function")
     start = time.time()
-    code = generate_C.generate_code(size, my_approximation)
+    #code = generate_C.generate_string(size, my_approximation)
     #print(code)
-    estimated_values = generate_C.run_c(x, code)
-    #estimated_values = my_approximation.evaluate(x)
+    #estimated_values = generate_C.run_c(x, code)
+    estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
     # calculate errors in the approximation and actual values
@@ -125,6 +125,46 @@ def Testing(a, b, func, max_order, max_error):
 
     return [max_abs_error, avg_abs_error, rel_error, eval_time]
 
+
+def Test(a, b, func, max_order, max_error):
+    # interpolant parameters
+    # maximum error allowed in the approximation
+    err = max_error
+    # node type used random and cheb are options, otherwise equispaced is used
+    nt = 'chebyshev'
+    # order of the monomial interpolant to be used
+    order = max_order
+    # sine, chebyshev, legendre, or monomials
+    interp_choice = 'monomials'
+
+    heap, adapt_class = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
+    my_approximation = approx.Approximator(adapt_class)
+
+    # evaluate the interpolated approximation on values in x
+    size = 1e3
+    x = np.linspace(a, b, size).astype(np.float64)
+    code = generate_C.generate_vec(my_approximation)
+    start = time.time()
+    print code
+    estimated_values = generate_C.run_vector_c(x, my_approximation.midpoints, my_approximation.coeff, code)
+    print time.time() - start
+    #estimated_values = my_approximation.evaluate(x)
+
+    # calculate errors in the approximation and actual values
+    s = time.time()
+    actual_values = func(x)
+    print time.time() - s
+    abs_errors = np.abs(actual_values - estimated_values)
+    rel_error = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
+    max_abs_error = np.max(abs_errors)
+    avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
+
+    print("----------------ERRORS---------------------------------")
+    print("Maximum absolute error: ", max_abs_error)
+    print("Average absolute error: ", avg_abs_error)
+    print("Maximum relative error: ", rel_error)
+    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
+
 # run the main program
 if __name__ == "__main__":
-    Testing(20, 30, f, 3, 1e-4)
+    Test(1, 5, f, 2, 1e-2)

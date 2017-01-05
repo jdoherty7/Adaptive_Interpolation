@@ -20,10 +20,32 @@ class Adaptive_Interpolation(object):
         self.node_choice = node_choice
         # string specifying basis choice
         self.basis = interpolant_choice
-        self.inter_array = []
+        self.heap = [0, 0]
         self.allowed_error = error
 
-    # function to evaluate order n Legendre polynomials. Is vectorized
+    def make_full_tree(self):
+        for i in range(len(self.heap)):
+            if self.heap[i] == 0:
+                # if empty then equate to its parent, ints will round down.
+                self.heap[i] = self.heap[i/2]
+
+    # function to add data to the heap
+    def add_to_heap(self, data, index):
+        # if index is before the root
+        if index < 1:
+            print("Error, heap index must be > 0")
+            return
+        # if the index is beyond the size of the heap
+        # then the heap size should be doubled
+        elif len(self.heap) <= index:
+            # double length of array if it is too small
+            # this adds enough space for a new level in the tree
+            for i in range(len(self.heap)):
+                self.heap.append(0)
+        # add to heap after possibly expanding the heap
+        self.heap[index] = data
+
+    # function to evaluate Legendre polynomials of x up to order n
     def legendre(self, n, x):
         if n == 0:
             return np.array([1.])
@@ -71,10 +93,10 @@ class Adaptive_Interpolation(object):
             my_vals.append(val)
         return np.array(my_vals)
 
-    # gets chebyshev n nodes from a to b
+    # gets n chebyshev nodes from a to b
     def get_cheb(self, a, b, n):
         if n == 1:
-            return np.array([(a+b)/2.])
+            return np.array([(a+b)/2.]).astype(np.float64)
         k = np.array(range(1, int(n) + 1)[::-1])
         nodes = np.cos((2.*k - 2.)*np.pi/(2.*int(n-1)))
         # change range from -1 to 1 to a to b
@@ -102,21 +124,15 @@ class Adaptive_Interpolation(object):
     # evaluation and nodes to evaluate the function at.
     def interpolate(self, nodes, basis):
         length = len(nodes)
-        V = np.outer(np.ones(length), np.ones(length))
+        V = np.outer(np.ones(length), np.ones(length)).astype(np.float64)
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis)
         try:
-            #print(nodes)
-            #print(V)
-            #print(self.function(nodes))
             coeff = la.solve(V, self.function(nodes))
-            #print(coeff)
             return coeff
         except:
             # there is a singular matrix probably
-            #print(nodes)
-            #print(V)
             return [0]
 
     # find the error of given coefficients on interval a, b
@@ -125,7 +141,7 @@ class Adaptive_Interpolation(object):
     def find_error(self, coeff, a, b, basis, order):
         # check 100 points per unit. This should give an error, relatively
         # stable so long as dominant features are not smaller than this resolution
-        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 5e1)).astype(np.float64)
+        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2)).astype(np.float64)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points, basis, order)
         # find maximum relative error in the given interval
@@ -134,32 +150,32 @@ class Adaptive_Interpolation(object):
 
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
-    def adapt(self, a, b):
+    def adapt(self, a, b, index):
+        print(a, b)
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
-        coeff = self.interpolate(nodes, self.basis)
+        coeff = self.interpolate(nodes, self.basis)#self.Remez(nodes)
         # append the coefficients and the range they are valid on to this array
         # also the basis function and order of in this range
-        self.inter_array.append([coeff, [a, b], self.max_order, self.basis])
+        self.add_to_heap([(a+b)/2., coeff, self.basis], index)
         # calculate the maximum relative error on the interval using these coefficients
         this_error = self.find_error(coeff, a, b, self.basis, self.max_order)
+        print(this_error, self.basis)
         # if error is larger than maximum allowed relative error then refine the interval
         if (this_error > self.allowed_error):
-            # delete the parent array, which should be last added, because
-            # it is no longer valid, since the interpolation has been refined
-            del self.inter_array[-1]
-            # adapt on the left subinterval and right subinterval
-            self.adapt(a, (a+b)/2.)
-            self.adapt((a+b)/2., b)
+            # adapt on the left subinterval then the right subinterval
+            self.adapt(a, (a+b)/2., 2*index)
+            self.adapt((a+b)/2., b, 2*index+1)
 
     # adaptive method finding an interpolant for a function
     # this checks multiple bases and orders to make an interpolant
-    def order_adapt(self, a, b):
+    def order_adapt(self, a, b, index):
         min_error = 1e100
         # check all the interpolant possibillities and orders to find the
         # best one that runs
         coeff = [0]
+        # check orders 0 to max_order
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
             # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
@@ -170,41 +186,34 @@ class Adaptive_Interpolation(object):
                 if curr_coeff[0] == 0:
                     break
                 error = self.find_error(curr_coeff, a, b, choice, curr_order)
-                #print(a, b, 'err', error, choice, curr_order)
-                #print(nodes, curr_coeff)
                 if error < min_error:
                     coeff = curr_coeff
                     min_error = error
-                    order = curr_order
                     basis = choice
         #need to check that all these variables are actually assigned
-        #print(a, b, "min error", min_error)
         if coeff[0] == 0:
-            print(a, b)
             return
-        self.inter_array.append([coeff, [a, b], order, basis])
+        self.add_to_heap([(a+b)/2., coeff, basis], index)
         # if there is a discontinuity then b-a will be very small
         # but the error will still be quite large, the resolution
         # the second term combats that. 
         if (min_error > self.allowed_error):# or ((abs(b-a) < 1e-3)):
-            # print(min_error, self.allowed_error, a, b, abs(b-a))
-            # delete the parent array, which should be last added, because
-            # it is no longer valid, since the interpolation has been refined
-            del self.inter_array[-1]
             # adapt on the left subinterval and right subinterval
-            self.order_adapt(a, (a+b)/2.)
-            self.order_adapt((a+b)/2., b)
-        else:
-            print(a, b, min_error, basis, order, coeff)
+            self.order_adapt(a, (a+b)/2., 2*index)
+            self.order_adapt((a+b)/2., b, 2*index + 1)
+        #else:
+            #print(a, b, min_error, basis, order, coeff)
 
     # Method to run the adaptive method initially
     def Adapt(self):
-        self.order_adapt(self.lower_bound, self.upper_bound)
-        return self.inter_array
+        self.adapt(self.lower_bound, self.upper_bound, 1)
+        self.make_full_tree()
+        # print(self.heap, len(self.heap))
+        return self.heap
 
 
 # function that creates and then runs an adaptive method.
 def adaptive(function, lower_bound, upper_bound, error, node_choice, order, interpolant_choice):
     my_adapt = Adaptive_Interpolation(function, error, [lower_bound, upper_bound], order, node_choice, interpolant_choice)
-    array = my_adapt.Adapt()
-    return array
+    heap = my_adapt.Adapt()
+    return heap, my_adapt

@@ -12,8 +12,10 @@ from __future__ import print_function
 
 import time
 import cgen as c
+import numpy as np
 import pyopencl as cl
 import pyopencl.array as cl_array
+
 
 # this is approximately 10 times faster than legendre evaluation
 # generate string is more than twice as fast as this though.
@@ -36,6 +38,8 @@ def generate_code(domain_size, ap):
     return str(c.Block([code]))
 
 
+# generate C code that evaluates legendre polynomials 
+# according to the approximator class that is given.
 def generate_code_legend(domain_size, ap):
     the_ifs = []
     for i in range(len(ap.ranges)):
@@ -78,13 +82,35 @@ def generate_code_legend(domain_size, ap):
     return str(code)
 
 
+# make vectorized monomial code
+# all the orders must be the same for this code
+# see remez for start of this
+def generate_vec(ap):
+    # maximum possible order of representation
+    max_or = ap.max_order
+    string = "int n = get_global_id(0);"
+    # gives the index of the coefficients to use
+    string += "int index = 1;"
+    string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
+    string += "{ index = mid[index] > x[n] ? 2*index : 2*index+1;"
+    string += "} "
+    string += "y[n] = "
+    sub_string = "coeff[index*{0}+{1}]".format(max_or+1, max_or)
+    for j in range(max_or)[::-1]:
+        # using horner's method, this requires the for loop to be reversed
+        sub_string = "x[n]*(" + sub_string + ") + coeff[index*{0}+{1}]".format(max_or+1, j)
+    string += sub_string
+    string += ";"
+    return string
+
+
 # input is an approximator class
 # output is C code.
 # simple method for evaluating a monomial interpolant with openCl
 # not currently vectorized
 def generate_string(domain_size, ap):
-    string = "{ for(int n=0; n<" + repr(int(domain_size)) + "; n++) { "
-    # string += "int n = get_global_id(0); "
+    #string = "{ for(int n=0; n<" + repr(int(domain_size)) + "; n++) { "
+    string = "{int n = get_global_id(0); "
     for i in range(len(ap.ranges)):
         string += "if ((" + repr(ap.ranges[i][0]) + " <= x[n])"
         string += " && (x[n] <= " + repr(ap.ranges[i][1]) + ")) { "
@@ -96,7 +122,7 @@ def generate_string(domain_size, ap):
         string += sub_string
         string += ";"
         string += "}"
-    string += "} }"
+    string += "}"# }"
     return string
 
 
@@ -110,17 +136,51 @@ def run_c(x, string):
     y_dev = cl_array.empty_like(x_dev)
 
     # build the code to run from given string
-    declaration = "__kernel void sum(__global double *x, __global double *y) "
+    declaration = "__kernel void sum(__global double *x, "
+    declaration += "__global double *y) "
     code = declaration + string
-    print(code)
+
     start = time.time()
     prg = cl.Program(ctx, code).build()
     print('Time to run C Code, ', time.time() - start)
-
-    prg.sum(queue, (1,), None, x_dev.data, y_dev.data)
+    #second parameter determines how many 'code instances' to make, (1, ) is 1
+    prg.sum(queue, x_dev.shape, None, x_dev.data, y_dev.data)
     return y_dev.get()
 
+# string is executable c code
+# x is the co-image of function
+def run_vector_c(x, table, coeff, string):
+    ctx = cl.create_some_context()
+    queue = cl.CommandQueue(ctx)
 
+    # turn coeff into 1 dimensional numpy array    
+    max_order = len(coeff[1])
+    coeff_n = np.ones(len(coeff)*max_order).astype(np.float64)
+    for i in range(len(coeff)*max_order):
+        coeff_n[i] = coeff[i/max_order][i%max_order]
+
+    print(coeff_n)
+    print(coeff)
+    print(table)
+    x_dev = cl_array.to_device(queue, x)
+    table_dev = cl_array.to_device(queue, np.array(table).astype(np.float64))
+    coeff_dev = cl_array.to_device(queue, coeff_n)
+    y_dev = cl_array.empty_like(x_dev)
+
+    # build the code to run from given string
+    declaration = "__kernel void sum(__global double *mid, "
+    declaration += "__global double *coeff, __global double *x, "
+    declaration += "__global double *y) "
+    code = declaration + '{' + string + '}'
+
+    start = time.time()
+    prg = cl.Program(ctx, code).build()
+    print('Time to run C Code, ', time.time() - start)
+    #second parameter determines how many 'code instances' to make, (1, ) is 1
+    prg.sum(queue, x_dev.shape, None, table_dev.data, coeff_dev.data, x_dev.data, y_dev.data)
+    return y_dev.get()
+    
+    
 # use to save the generated code for later use
 def write_to_file(file_name, string):
     my_file = open("generated_code/"+file_name+".txt", "w")

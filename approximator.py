@@ -10,156 +10,82 @@ interpolant choices, etc.
 """
 import numpy as np
 
-
 # class to evaluate an adaptive interpolant that has different
 # coefficients on different ranges
 class Approximator(object):
 
-    def __init__(self, array, interp_choice, order):
+    def __init__(self, adapt):
         # raw array data from adaptive interpolation method
-        self.array = array
-        self.range_tree = []
-        # matrices of coefficients and the ranges they are valid on
-        self.orders, self.bases = [], []
-        self.coeff, self.ranges = self.make_coeff()
-        # the properties of the interpolant used, such as the
-        # interpolant choice, and the order of the interpolant used
-        self.basis = interp_choice
-        self.order = order
-        # print("number of sub-intervals", len(self.ranges))
-        # print(self.ranges)
-        # print(self.coeff)
+        self.adapt = adapt
+        self.heap = adapt.heap
+        self.max_order = adapt.max_order
+        self.num_levels = int(np.log(len(self.heap))/np.log(2))
+        self.midpoints, self.coeff = self.make_trees()
 
-    # start of range tree method to make nested if statements possible
-    def make_range_tree(self):
-        for i in range(len(self.array)):
-            interval = self.array[i][1]
-            priority = interval[1] - interval[0]
-            midpoint = (interval[0] + interval[1])/2.
-            self.range_tree.append(priority, midpoint, i, interval)
-            # sort by the midpoint of the intervals
-            self.range_tree.sort(key=lambda x: x[1])
+    def make_trees(self):
+        midpoints = [0]
+        # initialize first element as coeff vector of 0 values
+        # assume that all coeff vectors are numpy arrays in heap
+        coeff = [0*self.heap[1][1]]
+        # assume that the heap is properly allocated
+        for i in range(1, len(self.heap)):
+            midpoints.append(self.heap[i][0])
+            coeff.append(self.heap[i][1])
+        return midpoints, coeff
 
-    # function to evaluate the legendre polynomials
-    def legendre(self, n, x):
-        if n == 0:
-            return np.array([1.])
-        elif n == 1:
-            return np.array([1., x])
-        elif n > 1:
-            L = [1., x]
-            for i in range(2, n+1):
-                first_term = (2*i-1)*x*L[i-1]
-                second_term = (i-1)*L[i-2]
-                L.append((first_term + second_term)*(1./n))
-            return np.array(L)
-
-    def chebyshev(self, n, x):
-        if n == 0:
-            return np.array([1.])
-        elif n == 1:
-            return np.array([1., x])
-        elif n > 1:
-            C = [1., x]
-            for i in range(2, n+1):
-                C.append(2*x*C[i-1] - C[i-2])
-            return np.array(C)
-
-    # given a number/array and order the function evaluates it
-    # based on the interpolant being used
-    def basis_function(self, x, order, basis):
-        if (basis == 'legendre'):
-            return self.legendre(order, x)
-        elif (basis == 'chebyshev'):
-            return self.chebyshev(order, x)
-        else:
-            # default make monomials the basis
-            return np.array([x**i for i in range(order+1)])
-
-    # make array of coefficients from the given array
-    def make_coeff(self):
-        coeff, ranges = [], []
-        # make the subintervals not overlap
-        self.change_ranges()
-        for i in range(len(self.array)):
-            coeff.append(self.array[i][0])
-            ranges.append(self.array[i][1])
-            self.orders.append(self.array[i][2])
-            self.bases.append(self.array[i][3])
-        return self.organize(coeff, ranges)
-
-    # make the subintervals not overlap. If there is a smaller subinterval
-    # then that is the used interval
-    # this is unnecessary with current adaptive method
-    def change_ranges(self):
-        # change lower bounds into respective ranges
-        for i in range(len(self.array)):
-            for j in range(i, len(self.array)):
-                if self.array[i][1][0] == self.array[j][1][0]:
-                    # check which one is a subinterval of the other
-                    if self.array[i][1][1] > self.array[j][1][1]:
-                        self.array[i][1][0] = self.array[j][1][1]
-                    elif self.array[i][1][1] < self.array[j][1][1]:
-                        self.array[j][1][0] = self.array[i][1][1]
-        # for changing upper bounds
-        for i in range(len(self.array)):
-            for j in range(i, len(self.array)):
-                if self.array[i][1][1] == self.array[j][1][1]:
-                    # check which one is a subinterval of the other
-                    if self.array[i][1][0] > self.array[j][1][0]:
-                        self.array[j][1][1] = self.array[i][1][0]
-                    elif self.array[i][1][0] < self.array[j][1][0]:
-                        self.array[i][1][1] = self.array[j][1][0]
-
-    # organize the coefficients and range arrays so they are in order
-    def organize(self, coefficients, ranges):
-        new_ranges, new_coeff, used_indices = [], [], []
-        new_bases, new_orders = [], []
-        for i in range(len(ranges)):
-            min_number = 1e9
-            min_index = 0
-            for j in range(len(ranges)):
-                if (ranges[j][0] < min_number) and (j not in used_indices):
-                    min_number = ranges[j][0]
-                    min_index = j
-            used_indices.append(min_index)
-            new_ranges.append(ranges[min_index])
-            new_coeff.append(coefficients[min_index])
-            new_bases.append(self.bases[min_index])
-            new_orders.append(self.orders[min_index])
-        self.bases = new_bases
-        self.orders = new_orders
-        return new_coeff, new_ranges
-
-    # get the index of the coefficients for the given number using
-    # the known ranges of the coefficients.
-    def get_index_of_range(self, number):
-        for i in range(len(self.ranges)):
-            # assume number is in the designated range
-            if (self.ranges[i][0] <= number) and (number <= self.ranges[i][1]):
-                return i
+    def get_index(self, x_val):
+        # start at index 1
+        index = 1
+        for _ in range(self.num_levels):
+            # get midpoint of the current interval
+            mid = self.heap[index][0]
+            # go left
+            if x_val < mid:
+                # if the next child does not exist return current element
+                if 2*index >= len(self.heap):
+                    return index
+                # otherwise move to next level in tree
+                else:
+                    index = 2*index
+            # otherwise go right
             else:
-                # x is not in the interpolated interval
-                return -1
+                if 2*index + 1 >= len(self.heap):
+                    return index
+                else:
+                    index = 2*index + 1
+        # reutrn the index of the element in the heap
+        return index
 
     # assume that the x array being evaluated is increasing
     def evaluate(self, x):
         new_x = []
-        # get the index of the range of the first number of the array
-        index = self.get_index_of_range(x[0])
-        # x is not in interpolated interval
-        if index == -1:
-            print(x[0], 'is not in appropriate interval.')
-            return 0
         for x0 in x:
-            # if the number is not in the current range move the
-            # range to the next range in the list
-            if (self.ranges[index][1] < x0):
-                index += 1
-            # make xs in the monomial series for evaluation
-            xs = self.basis_function(x0, self.orders[index], self.bases[index])
-            # multiply the calculated monomials by their coefficients
+            # get index of heap element for x0 and data from that element
+            index = self.get_index(x0)
+            coeff = self.heap[index][1]
+            basis = self.heap[index][2]
+            order = len(coeff) - 1
+            # evaluate the given basis function
+            xs = self.adapt.basis_function(x0, order, basis)
+            # multiply the calculated basis by their coefficients
             # that are givent for the calculated array
-            val = np.dot(np.array(self.coeff[index]), xs)
+            val = np.dot(np.array(coeff), xs)
             new_x.append(val)
         return new_x
+
+"""
+x = np.outer(np.arange(1,6), np.arange(1,4))
+y = 0*x
+x_new = np.ones(len(x)*len(x[1])).astype(np.float64)
+for i in range(len(x)*len(x[1])):
+    x_new[i] = x[i/len(x[1])][i%len(x[1])]
+
+print x
+print x_new
+
+max_order = x.shape[1]
+for i in range(x.shape[0]):
+    for j in range(x.shape[1]):
+        y[i, j] = x_new[i*(max_order) + j]
+print y
+"""
