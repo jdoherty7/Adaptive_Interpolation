@@ -7,6 +7,7 @@ as C code. I also writes the method
 as C code into a file to save if the user wishes to use it later
 
 """
+
 from __future__ import absolute_import
 from __future__ import print_function
 
@@ -19,7 +20,7 @@ import pyopencl.array as cl_array
 
 # this is approximately 10 times faster than legendre evaluation
 # generate string is more than twice as fast as this though.
-def generate_code(domain_size, ap):
+def gen_mono_b(ap, domain_size):
     the_ifs = []
     for i in range(len(ap.ranges)):
         then = []
@@ -40,7 +41,7 @@ def generate_code(domain_size, ap):
 
 # generate C code that evaluates legendre polynomials 
 # according to the approximator class that is given.
-def generate_code_legend(domain_size, ap):
+def gen_leg_b(ap, domain_size):
     the_ifs = []
     for i in range(len(ap.ranges)):
         then = []
@@ -82,10 +83,41 @@ def generate_code_legend(domain_size, ap):
     return str(code)
 
 
+# generate C code that evaluates chebyshev polynomials 
+# according to the approximator class that is given.
+def gen_cheb_v(ap):
+    # maximum possible order of representation
+    order = ap.max_order
+    string = "int n = get_global_id(0);"
+    # gives the index of the coefficients to use
+    string += "int index = 1;"
+    string += "double T0, T1, Tn, s;"
+    string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
+    string +=     "{ index = mid[index] > x[n] ? 2*index : 2*index+1;"
+    string += "} "
+    string += "T0 = 1.0;"
+    if order > 0:
+        string += "T1 = x[n];"
+    # initialize the sum
+    string += "s = coeff[index*{0}+{1}]*T0 + ".format(order+1, 0)
+    if order > 0:
+        string += "coeff[index*{0}+{1}]*T1;".format(order+1, 1)
+    if order > 1:
+        string += "for (int j = 2; j <=" + repr(order) + "; j--) {"
+        string +=     "Tn = 2*x[n]*T1 - T0;"
+        string +=     "s = s + coeff[index*{0} + j]*Tn;".format(order+1)
+        string +=     "T0 = T1;"
+        string +=     "T1 = Tn;"
+        string += "}"
+    string += "y[n] = s;"
+    return string
+
+
+
 # make vectorized monomial code
 # all the orders must be the same for this code
 # see remez for start of this
-def generate_vec(ap):
+def gen_mono_v(ap):
     # maximum possible order of representation
     max_or = ap.max_order
     string = "int n = get_global_id(0);"
@@ -110,7 +142,7 @@ def generate_vec(ap):
 # output is C code.
 # simple method for evaluating a monomial interpolant with openCl
 # not currently vectorized
-def generate_string(domain_size, ap):
+def gen_mono_vb(domain_size, ap):
     #string = "{ for(int n=0; n<" + repr(int(domain_size)) + "; n++) { "
     string = "{ int n = get_global_id(0);"
     for i in range(len(ap.ranges)):
@@ -149,9 +181,10 @@ def run_c(x, string):
     prg.sum(queue, x_dev.shape, None, x_dev.data, y_dev.data)
     return y_dev.get()
 
+
 # string is executable c code
 # x is the co-image of function
-def run_vector_c(x, table, coeff, string):
+def run_c_v(x, table, coeff, string):
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
 

@@ -135,20 +135,23 @@ def Test(a, b, func, max_order, max_error):
     # order of the monomial interpolant to be used
     order = max_order
     # sine, chebyshev, legendre, or monomials
-    interp_choice = 'monomials'
+    interp_choice = 'chebyshev'
 
     heap, adapt_class = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
     my_approximation = app.Approximator(adapt_class)
 
     # evaluate the interpolated approximation on values in x
-    size = 1e6
+    size = 1e4
     x = np.linspace(a, b, size).astype(np.float64)
-    code = generate.generate_vec(my_approximation)
+    code = generate.generate_code_chebyshev(my_approximation)
+    #code = generate.generate_vec(my_approximation)
     #code1 = generate.generate_string(size, my_approximation)
     start = time.time()
     print
     print code
     print
+    print my_approximation.coeff
+    
     estimated_values = generate.run_vector_c(x, my_approximation.midpoints, my_approximation.coeff, code)
     print "vec time: ", time.time() - start
     #start1 = time.time()
@@ -171,6 +174,17 @@ def Test(a, b, func, max_order, max_error):
     print("Maximum relative error: ", rel_error)
     my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
 
+def make_monomial_interpolant():
+    pass
+def make_chebyshev_interpolant()
+    pass
+    #make_legendre_interpolant()
+    #generate_code(branching, vectorized)
+    #save_code()
+    #run_saved_code()
+    #run_code(branching, vectorized)
+    #generate_and_run_code()
+
 # run the main program
 if __name__ == "__main__":
-    Test(1, 5, f, 7, 1e-14)
+    Test(1, 5, f, 9, 1e-5)

@@ -153,7 +153,12 @@ class Interpolant(object):
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
-        coeff = self.interpolate(nodes, self.basis)#self.Remez(nodes)
+        temp = self.interpolate(nodes, self.basis)#self.Remez(nodes)
+        if temp[0] != 0: 
+            coeff = temp
+        else:
+            print("Error assigning coeff", a, b)
+            return
         # append the coefficients and the range they are valid on to this array
         # also the basis function and order of in this range
         self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b]], index)
@@ -161,7 +166,7 @@ class Interpolant(object):
         this_error = self.find_error(coeff, a, b, self.basis, self.max_order)
         # print(this_error, self.basis)
         # if error is larger than maximum allowed relative error then refine the interval
-        if (this_error > self.allowed_error) and (abs(b-a)>1e-14):
+        if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
             self.adapt(a, (a+b)/2., 2*index)
             self.adapt((a+b)/2., b, 2*index+1)
@@ -215,5 +220,5 @@ def adaptive(function, lower_bound, upper_bound, error, node_choice, \
              order, interpolant_choice):
     my_adapt = Interpolant(function, error, order, node_choice, \
                            interpolant_choice)
-    heap = my_adapt.run_adapt(lower_bound, upper_bound)
-    return heap, my_adapt
+    my_adapt.run_adapt(lower_bound, upper_bound)
+    return my_adapt

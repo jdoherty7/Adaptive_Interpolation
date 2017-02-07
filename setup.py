@@ -12,7 +12,7 @@ config = {
     'install_requires': ['nose', 'numpy', 'matplotlib', \
     'pyopencl', 'scipy', 'cgen']
     'packages'; ['ADAPT'],
-    'name': 'Adaptive Interpolation Project'
+    'name': 'adaptive_interpolation'
 
 }
 

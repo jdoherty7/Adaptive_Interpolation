@@ -18,7 +18,8 @@ class Approximator(object):
         # raw array data from adaptive interpolation method
         self.adapt = adapt
         self.heap = adapt.heap
-        #print adapt.heap
+        self.basis = adapt.basis
+        self.code
         self.max_order = adapt.max_order
         self.num_levels = int(np.log(len(self.heap))/np.log(2))
         self.midpoints, self.coeff = self.make_trees()
