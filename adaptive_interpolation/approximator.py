@@ -19,7 +19,7 @@ class Approximator(object):
         self.adapt = adapt
         self.heap = adapt.heap
         self.basis = adapt.basis
-        self.code
+        self.code = 0
         self.max_order = adapt.max_order
         self.num_levels = int(np.log(len(self.heap))/np.log(2))
         self.midpoints, self.coeff = self.make_trees()
@@ -75,20 +75,3 @@ class Approximator(object):
             val = np.dot(np.array(coeff), xs)
             new_x.append(val)
         return new_x
-
-"""
-x = np.outer(np.arange(1,6), np.arange(1,4))
-y = 0*x
-x_new = np.ones(len(x)*len(x[1])).astype(np.float64)
-for i in range(len(x)*len(x[1])):
-    x_new[i] = x[i/len(x[1])][i%len(x[1])]
-
-print x
-print x_new
-
-max_order = x.shape[1]
-for i in range(x.shape[0]):
-    for j in range(x.shape[1]):
-        y[i, j] = x_new[i*(max_order) + j]
-print y
-"""

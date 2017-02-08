@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 # bessel function for testing
 def f(x):
-    return spec.jn(3, x)
+    return spec.jn(0, x)
     #return x**2 - 10.*x**1 + 25.*x**0
     #return 0 + 0*x + (.5*(3*x**2 - 1))
     # it takes 40s to graph n =20 with 5e5 points
@@ -44,7 +44,7 @@ def f1(x0):
 
 
 # plot the absolute errors as well as the actual and approximated functions
-def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
+def my_plot(x, actual, approximation, abs_errors):
     plt.figure()
     plt.title('Actual and Approximate values Graphed')
     plt.plot(x, actual, 'r')
@@ -64,6 +64,10 @@ def my_plot(x, actual, approximation, abs_errors, rel_errors, err):
 # interpolant while max_error is the maximum relative error allowed 
 # the error is with respect to the infinity norm)
 def Testing(a, b, func, max_order, max_error):
+    # this is set as so because double precision digits are used.    
+    if max_error < 1e-15:
+        max_error = 1e-15
+    
     # interpolant parameters
     # maximum error allowed in the approximation
     err = max_error
@@ -72,32 +76,33 @@ def Testing(a, b, func, max_order, max_error):
     # order of the monomial interpolant to be used
     order = max_order
     # sine, chebyshev, legendre, or monomials
-    interp_choice = 'monomials'
+    interp_choice = 'chebyshev'
 
     start = time.time()
     print("Start adaptive interpolation")
-    raw_interpolant_data = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
+    my_adapt_class = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
     al_time = time.time() - start
 
     #the choice of interpolation is not currently implemented. monomials is default
     start = time.time()
     print("Building Approximator")
-    my_approximation = app.Approximator(raw_interpolant_data, order)
+    my_approximation = app.Approximator(my_adapt_class)
     setup_time = time.time() - start
 
     # evaluate the interpolated approximation on values in x
-    size = 1e3
+    size = 1e4
     x = np.linspace(a, b, size).astype(np.float64)
-    print("Evaluating the Function")
+    print("Evaluating the Approximation")
+    code = generate.gen_cheb_v(my_approximation)
     start = time.time()
-    #code = generate.generate_string(size, my_approximation)
-    #print(code)
-    #estimated_values = generate.run_c(x, code)
-    estimated_values = my_approximation.evaluate(x)
+    estimated_values = generate.run_c_v(x, my_approximation.midpoints, \
+                                        my_approximation.coeff, code)
+    #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
     # calculate errors in the approximation and actual values
     start = time.time()
+    print("Evaluating the Function")
     actual_values = func(x)
     their_time = time.time() - start
     abs_errors = np.abs(actual_values - estimated_values)
@@ -107,9 +112,13 @@ def Testing(a, b, func, max_order, max_error):
     avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
 
     print()
-    print(order, nt)
+    print("x size: ", size)
+    print("max_order: ", order) 
+    print("node choice: ", nt)
     print()
     print("-------------------TIMES-------------------------------")
+    print("NOTE: The asymptotic values of the function evaluations")
+    print("is what is important, which is not well represented here.")
     print("Time to run adaptive algorithm            : ", al_time)
     print("Time to construct approximation class     : ", setup_time)
     print("Time to evaluate the approximation  (MINE): ", eval_time)
@@ -121,70 +130,15 @@ def Testing(a, b, func, max_order, max_error):
     print("Maximum relative error: ", rel_error)
     print()
 
-    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
-
-    return [max_abs_error, avg_abs_error, rel_error, eval_time]
+    my_plot(x, actual_values, estimated_values, abs_errors)
 
 
-def Test(a, b, func, max_order, max_error):
-    # interpolant parameters
-    # maximum error allowed in the approximation
-    err = max_error
-    # node type used random and cheb are options, otherwise equispaced is used
-    nt = 'chebyshev'
-    # order of the monomial interpolant to be used
-    order = max_order
-    # sine, chebyshev, legendre, or monomials
-    interp_choice = 'chebyshev'
-
-    heap, adapt_class = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
-    my_approximation = app.Approximator(adapt_class)
-
-    # evaluate the interpolated approximation on values in x
-    size = 1e4
-    x = np.linspace(a, b, size).astype(np.float64)
-    code = generate.generate_code_chebyshev(my_approximation)
-    #code = generate.generate_vec(my_approximation)
-    #code1 = generate.generate_string(size, my_approximation)
-    start = time.time()
-    print
-    print code
-    print
-    print my_approximation.coeff
-    
-    estimated_values = generate.run_vector_c(x, my_approximation.midpoints, my_approximation.coeff, code)
-    print "vec time: ", time.time() - start
-    #start1 = time.time()
-    #estimated_values = generate.run_c(x, code1)
-    #print "non-vec time: ", time.time() - start1
-    #estimated_values = my_approximation.evaluate(x)
-
-    # calculate errors in the approximation and actual values
-    s = time.time()
-    actual_values = func(x)
-    print time.time() - s
-    abs_errors = np.abs(actual_values - estimated_values)
-    rel_error = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
-    max_abs_error = np.max(abs_errors)
-    avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
-
-    print("----------------ERRORS---------------------------------")
-    print("Maximum absolute error: ", max_abs_error)
-    print("Average absolute error: ", avg_abs_error)
-    print("Maximum relative error: ", rel_error)
-    my_plot(x, actual_values, estimated_values, abs_errors, rel_error, err)
-
-def make_monomial_interpolant():
+# Given a specific Approximator class, this will test how the
+# performance and accuracy varies when the code is varied from branching
+# and vectorized to not branching and not vectorized
+def test_parallel_methods(approx):
     pass
-def make_chebyshev_interpolant()
-    pass
-    #make_legendre_interpolant()
-    #generate_code(branching, vectorized)
-    #save_code()
-    #run_saved_code()
-    #run_code(branching, vectorized)
-    #generate_and_run_code()
 
 # run the main program
 if __name__ == "__main__":
-    Test(1, 5, f, 9, 1e-5)
+    Testing(0, 5, f, 30, 1e-14)

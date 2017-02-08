@@ -1,7 +1,7 @@
 """
 New adaptive interpolation with better adaptive method
-
 """
+
 import numpy as np
 import numpy.linalg as la
 
@@ -149,7 +149,9 @@ class Interpolant(object):
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
     def adapt(self, a, b, index):
-        # print(a, b)
+        # prevent from refining the interval too greatly
+        if (abs(b-a) < self.allowed_error):
+            return
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
@@ -166,14 +168,18 @@ class Interpolant(object):
         this_error = self.find_error(coeff, a, b, self.basis, self.max_order)
         # print(this_error, self.basis)
         # if error is larger than maximum allowed relative error then refine the interval
+        # if dom
         if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
             self.adapt(a, (a+b)/2., 2*index)
             self.adapt((a+b)/2., b, 2*index+1)
 
     # adaptive method finding an interpolant for a function
-    # this checks multiple bases and orders to make an interpolant
-    def order_adapt(self, a, b, index):
+    # this checks multiple orders to make an interpolant
+    def variable_order_adapt(self, a, b, index):
+        # recursed too far
+        if (abs(b-a) < self.allowed_error):
+            return
         min_error = 1e100
         # check all the interpolant possibillities and orders to find the
         # best one that runs
@@ -182,36 +188,39 @@ class Interpolant(object):
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
             # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
-            for choice in [self.basis]:
-                nodes = self.get_nodes(a, b, curr_order)
-                curr_coeff = self.interpolate(nodes, choice)
-                # if you get a singular matrix, break the for loop
-                if curr_coeff[0] == 0:
-                    break
-                error = self.find_error(curr_coeff, a, b, choice, curr_order)
-                if error < min_error:
-                    coeff = curr_coeff
-                    min_error = error
-                    basis = choice
+            nodes = self.get_nodes(a, b, curr_order)
+            curr_coeff = self.interpolate(nodes, self.basis)
+            # if you get a singular matrix, break the for loop
+            if curr_coeff[0] == 0:
+                break
+            error = self.find_error(curr_coeff, a, b, self.basis, curr_order)
+            if error < min_error:
+                coeff = curr_coeff
+                min_error = error
         #need to check that all these variables are actually assigned
         if coeff[0] == 0:
             return
-        self.add_to_heap([(a+b)/2., coeff, basis, [a, b]], index)
+        # turn into max_order interpolant so it can run using
+        # same generative code
+        padded = np.zeros((self.max_order+1,))
+        padded[:coeff.shape[0]] = coeff
+        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b]], index)
         # if there is a discontinuity then b-a will be very small
         # but the error will still be quite large, the resolution
         # the second term combats that. 
         if (min_error > self.allowed_error):# or ((abs(b-a) < 1e-3)):
             # adapt on the left subinterval and right subinterval
-            self.order_adapt(a, (a+b)/2., 2*index)
-            self.order_adapt((a+b)/2., b, 2*index + 1)
-        #else:
-            #print(a, b, min_error, basis, order, coeff)
+            self.variable_order_adapt(a, (a+b)/2., 2*index)
+            self.variable_order_adapt((a+b)/2., b, 2*index + 1)
+
 
     # Method to run the adaptive method initially
-    def run_adapt(self, lower_bound , upper_bound):
-        self.adapt(lower_bound, upper_bound, 1)
+    def run_adapt(self, lower_bound, upper_bound, variable_order=False):
+        if variable_order:
+            self.variable_order_adapt(lower_bound, upper_bound, 1)
+        else:
+            self.adapt(lower_bound, upper_bound, 1)
         self.make_full_tree()
-        # print(self.heap, len(self.heap))
         return self.heap
 
 

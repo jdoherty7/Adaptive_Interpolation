@@ -18,6 +18,18 @@ import pyopencl as cl
 import pyopencl.array as cl_array
 
 
+def gen_mono(ap, domain_size):
+    pass
+
+
+def gen_cheb(ap, domain_size):
+    pass
+
+
+def gen_leg(ap, domain_size):
+    pass
+
+
 # this is approximately 10 times faster than legendre evaluation
 # generate string is more than twice as fast as this though.
 def gen_mono_b(ap, domain_size):
@@ -38,6 +50,9 @@ def gen_mono_b(ap, domain_size):
     code = c.For('int n=0', 'n<' + repr(int(domain_size)), 'n++', block)
     return str(c.Block([code]))
 
+
+def gen_cheb_b(ap, domain_size):
+    pass
 
 # generate C code that evaluates legendre polynomials 
 # according to the approximator class that is given.
@@ -83,37 +98,6 @@ def gen_leg_b(ap, domain_size):
     return str(code)
 
 
-# generate C code that evaluates chebyshev polynomials 
-# according to the approximator class that is given.
-def gen_cheb_v(ap):
-    # maximum possible order of representation
-    order = ap.max_order
-    string = "int n = get_global_id(0);"
-    # gives the index of the coefficients to use
-    string += "int index = 1;"
-    string += "double T0, T1, Tn, s;"
-    string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
-    string +=     "{ index = mid[index] > x[n] ? 2*index : 2*index+1;"
-    string += "} "
-    string += "T0 = 1.0;"
-    if order > 0:
-        string += "T1 = x[n];"
-    # initialize the sum
-    string += "s = coeff[index*{0}+{1}]*T0 + ".format(order+1, 0)
-    if order > 0:
-        string += "coeff[index*{0}+{1}]*T1;".format(order+1, 1)
-    if order > 1:
-        string += "for (int j = 2; j <=" + repr(order) + "; j--) {"
-        string +=     "Tn = 2*x[n]*T1 - T0;"
-        string +=     "s = s + coeff[index*{0} + j]*Tn;".format(order+1)
-        string +=     "T0 = T1;"
-        string +=     "T1 = Tn;"
-        string += "}"
-    string += "y[n] = s;"
-    return string
-
-
-
 # make vectorized monomial code
 # all the orders must be the same for this code
 # see remez for start of this
@@ -138,12 +122,45 @@ def gen_mono_v(ap):
     return string
 
 
+# generate C code that evaluates chebyshev polynomials 
+# according to the approximator class that is given.
+def gen_cheb_v(ap):
+    # maximum possible order of representation
+    order = ap.max_order
+    string = "int n = get_global_id(0);"
+    # gives the index of the coefficients to use
+    string += "int index = 1;"
+    string += "double T0, T1, Tn, s;"
+    string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
+    string +=     "{ index = mid[index] > x[n] ? 2*index : 2*index+1;"
+    string += "} "
+    string += "T0 = 1.0;"
+    if order > 0:
+        string += "T1 = x[n];"
+    # initialize the sum
+    string += "s = coeff[index*{0}+{1}]*T0 + ".format(order+1, 0)
+    if order > 0:
+        string += "coeff[index*{0}+{1}]*T1;".format(order+1, 1)
+    if order > 1:
+        string += "for (int j = 2; j <=" + repr(order) + "; j++) {"
+        string +=     "Tn = 2*x[n]*T1 - T0;"
+        string +=     "s = s + coeff[index*{0} + j]*Tn;".format(order+1)
+        string +=     "T0 = T1;"
+        string +=     "T1 = Tn;"
+        string += "}"
+    string += "y[n] = s;"
+    return string
+
+
+def gen_leg_v(ap):
+    pass
+
+
 # input is an approximator class
 # output is C code.
 # simple method for evaluating a monomial interpolant with openCl
 # not currently vectorized
-def gen_mono_vb(domain_size, ap):
-    #string = "{ for(int n=0; n<" + repr(int(domain_size)) + "; n++) { "
+def gen_mono_vb(ap):
     string = "{ int n = get_global_id(0);"
     for i in range(len(ap.ranges)):
         string += "if ((" + repr(ap.ranges[i][-1][0]) + " <= x[n])"
@@ -156,8 +173,16 @@ def gen_mono_vb(domain_size, ap):
         string += sub_string
         string += ";"
         string += "}"
-    string += "}"# }"
+    string += "}"
     return string
+
+
+def gen_cheb_vb(ap):
+    pass
+
+
+def gen_leg_vb(ap):
+    pass
 
 
 # string is executable c code
@@ -174,9 +199,8 @@ def run_c(x, string):
     declaration += "__global double *y) "
     code = declaration + string
 
-    start = time.time()
     prg = cl.Program(ctx, code).build()
-    print('Time to run C Code, ', time.time() - start)
+
     #second parameter determines how many 'code instances' to make, (1, ) is 1
     prg.sum(queue, x_dev.shape, None, x_dev.data, y_dev.data)
     return y_dev.get()
@@ -194,7 +218,6 @@ def run_c_v(x, table, coeff, string):
     for i in range(len(coeff)*max_order):
         coeff_n[i] = coeff[i/max_order][i%max_order]
 
-
     x_dev = cl_array.to_device(queue, x)
     table_dev = cl_array.to_device(queue, np.array(table).astype(np.float64))
     coeff_dev = cl_array.to_device(queue, coeff_n)
@@ -208,9 +231,10 @@ def run_c_v(x, table, coeff, string):
 
     start = time.time()
     prg = cl.Program(ctx, code).build()
-    print('Time to run C Code, ', time.time() - start)
     #second parameter determines how many 'code instances' to make, (1, ) is 1
     prg.sum(queue, x_dev.shape, None, table_dev.data, coeff_dev.data, x_dev.data, y_dev.data)
+    print('Time to run C Code, ', time.time() - start)
+
     return y_dev.get()
     
     

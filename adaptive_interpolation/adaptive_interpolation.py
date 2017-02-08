@@ -122,6 +122,7 @@ def run_code(code, approx, domain_size, vectorized):
     b = approx.heap[-1][0]
     x = np.linspace(a, b, domain_size).astype(np.float64)
     if vectorized:
-        generate.run_c_v(x, code)
+        y = generate.run_c_v(x, code)
     else:
-        generate.run_c(x, approx.midpoints, approx.coeff, code)
+        y = generate.run_c(x, approx.midpoints, approx.coeff, code)
+    return y
