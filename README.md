@@ -1,4 +1,4 @@
-# Adaptive Interpolation Project
+# Adaptive Interpolation Project (BETA)
 This is a pythonic method for creating an approximation for a function
 on a given domain with a specified error. It is done by adaptively interpolating
 said function on the domain until the allowed error is reached. C code is then
@@ -8,26 +8,22 @@ run in the library using a method that uses pyopencl to run the code in parallel
 
 # Quick and Easy Demonstration
 
-To see a demonstration of the code in action download and install the package.
+To see a demonstration of the code in action download this git repository.
 
-Run: python performance_tests.py
+Change your working directory to adaptive_interpolation, which is the folder
+containing the core scripts for this project. Then, while in said directory
+run the performance_test.py script. (ie. python performance_test.py )
 
-This will run the script. Should run a function that displays the interpolant
+This script will run a function that displays the interpolant
 and actual function in a plot as well as a plot of the absolute errors between
-the two. The parameters given are a domain between 0 and 5, the 0th bessel
+the two. The parameters given are an interval of 0 to 5, the 0th bessel
 function, a 30th order interpolant, and an allowed relative error of 1e-14.
 
 It then displays times run for the current run and errors in the functions.
 The most important thing here is the relative error that is found, defined
 as Inf_norm(abs_errors)/Inf_norm(actual_values).
 
-The times are displayed more so that as parameters are tweaked the user can
-see how times may change with such tweakings. Furthermore, if the user
-increases the size of the x being evaulated a better picture of the 
-asymptotic performance of the interpolant comes into view.
-
-
-
+Interesting things to tweak in this script:
 
 
 ## adaptive_interpolation
