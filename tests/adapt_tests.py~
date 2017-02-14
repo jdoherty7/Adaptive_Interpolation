@@ -1,7 +1,0 @@
-from nose.tools import *
-from ADAPT.adapt import Adaptive_Interpolation
-
-def test
-
-
-

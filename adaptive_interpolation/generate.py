@@ -151,9 +151,33 @@ def gen_cheb_v(ap):
     string += "y[n] = s;"
     return string
 
-
+# generates vectorized legendre code without branching given an approximator
 def gen_leg_v(ap):
-    pass
+    # maximum possible order of representation
+    order = ap.max_order
+    string = "int n = get_global_id(0);"
+    # gives the index of the coefficients to use
+    string += "int index = 1;"
+    string += "double L0, L1, Ln, s;"
+    string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
+    string +=     "{ index = mid[index] > x[n] ? 2*index : 2*index+1;"
+    string += "} "
+    string += "L0 = 1.0;"
+    if order > 0:
+        string += "L1 = x[n];"
+    # initialize the sum
+    string += "s = coeff[index*{0}+{1}]*L0 + ".format(order+1, 0)
+    if order > 0:
+        string += "coeff[index*{0}+{1}]*L1;".format(order+1, 1)
+    if order > 1:
+        string += "for (int j = 2; j <=" + repr(order) + "; j++) {"
+        string +=     "Ln = ((2.*j-1.)*x[n]*L1 - (j-1.)*L0)/{0};".format(order)
+        string +=     "s = s + coeff[index*{0} + j]*Ln;".format(order+1)
+        string +=     "L0 = L1;"
+        string +=     "L1 = Ln;"
+        string += "}"
+    string += "y[n] = s;"
+    return string
 
 
 # input is an approximator class

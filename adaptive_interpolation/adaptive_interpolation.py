@@ -1,6 +1,5 @@
 """
 Main methods used in the adaptive_interpolation library
-2/7/17
 """
 import generate
 import numpy as np
@@ -8,8 +7,7 @@ import adapt
 import approximator as app
 
 
-
-# takes a domain, a function, an interpolant order, and a maximum
+# takes an interval from a to b, a function, an interpolant order, and a maximum
 # allowed error and returns an Approximator class representing
 # a monomial interpolant that fits those parameters
 def make_monomial_interpolant(a, b, func, order, error):
@@ -22,7 +20,7 @@ def make_monomial_interpolant(a, b, func, order, error):
     return app.Approximator(adapt_class)
 
 
-# takes a domain, a function, an interpolant order, and a maximum
+# takes an interval from a to b, a function, an interpolant order, and a maximum
 # allowed error and returns an Approximator class representing
 # a chebyshev interpolant that fits those parameters
 def make_chebyshev_interpolant(a, b, func, order, error):
@@ -36,7 +34,7 @@ def make_chebyshev_interpolant(a, b, func, order, error):
     return app.Approximator(adapt_class)
 
 
-# takes a domain, a function, an interpolant order, and a maximum
+# takes an interval from a to b, a function, an interpolant order, and a maximum
 # allowed error and returns an Approximator class representing
 # a legendre interpolant that fits those parameters
 def make_legendre_interpolant(a, b, func, order, error):
@@ -50,11 +48,16 @@ def make_legendre_interpolant(a, b, func, order, error):
     return app.Approximator(adapt_class)
 
 
-# generate code. given an approximator class will return a string
-# representing executable C code that can be run using pyopencl
-# this is done by using the correct run method described
-def generate_code(approx, branching, vectorized, domain_size=None):
-    
+# Given an approximator class returned from a make an interpolant function, this
+# function will return an approximator class that now contains C code to evaluate
+# the interpolated function
+# 
+# by default the code generated is non branching and vectorized. if the code is 
+# not vectorized then a domain_size must be given to the function
+def generate_code(approx, branching=0, vectorized=1, domain_size=None):
+    if (vectorized == 0) and (domain_size == None):
+        print("Please enter the number of points that will be evaluated in domain_size.")
+		return 0
     if approx.basis == 'monomials':
         if not branching:
             if vectorized:
@@ -87,7 +90,7 @@ def generate_code(approx, branching, vectorized, domain_size=None):
         if not branching:
             if vectorized:
                 pass
-                # code = generate.gen_leg_v(approx)
+                code = generate.gen_leg_v(approx)
             else:
                 pass
                 #code = generate.gen_leg(approx, domain_size)
@@ -102,6 +105,8 @@ def generate_code(approx, branching, vectorized, domain_size=None):
 
 
 # use to save the generated code for later use
+# NOTE: this only works if run from main directory, where
+# the folder generated_code exists
 def save_code(file_name, code):
     my_file = open("generated_code/"+file_name+".txt", "w")
     my_file.write(code)
@@ -109,6 +114,8 @@ def save_code(file_name, code):
 
 
 # get a string of the C code that was previously saved
+# NOTE: this only works if run from main directory, where
+# the folder generated_code exists
 def get_saved_code(file_name):
     my_file = open("generated_code/"+file_name+".txt", "r")
     # code is just on first line of file, so get this then run it
@@ -116,13 +123,16 @@ def get_saved_code(file_name):
     return code
 
 
-# run code, must specify if vectorized code or not
-def run_code(code, approx, domain_size, vectorized):
-    a = approx.heapp[-1][0]
-    b = approx.heap[-1][0]
-    x = np.linspace(a, b, domain_size).astype(np.float64)
+# code is a string of C code to be evaluated. x is a numpy array
+# that is a type float64 and is in the interval specified by the user
+# upon the creation of the interpolant. if the code is not vectorized
+# then the approximator class must also be given to the function
+def run_code(code, x, approx=None, vectorized=True):
     if vectorized:
         y = generate.run_c_v(x, code)
-    else:
+		return y
+    else if approx:
         y = generate.run_c(x, approx.midpoints, approx.coeff, code)
-    return y
+        return y
+    print("You must give an appropriate appxoimator class if the code is not vectorized.")
+	return 0
