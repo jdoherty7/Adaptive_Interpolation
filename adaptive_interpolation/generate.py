@@ -11,7 +11,6 @@ as C code into a file to save if the user wishes to use it later
 from __future__ import absolute_import
 from __future__ import print_function
 
-import time
 import cgen as c
 import numpy as np
 import pyopencl as cl
@@ -40,7 +39,7 @@ def gen_mono_b(ap, domain_size):
         then.append(statement)
         for j in range(ap.orders[i])[::-1]:
             # using horner's method, this requires the for loop to be reversed
-            statement = c.Statement('y[n] = x[n]*y[n] + ' + repr(ap.coeff[i][j]))
+            statement = c.Statement('y[n] = x[n]*y[n] + '+repr(ap.coeff[i][j]))
             then.append(statement)
         condition = '(' + repr(ap.ranges[i][0]) + ' <= x[n])'
         condition += ' && (x[n] <= ' + repr(ap.ranges[i][1]) + ')'
@@ -54,7 +53,8 @@ def gen_mono_b(ap, domain_size):
 def gen_cheb_b(ap, domain_size):
     pass
 
-# generate C code that evaluates legendre polynomials 
+
+# generate C code that evaluates legendre polynomials
 # according to the approximator class that is given.
 def gen_leg_b(ap, domain_size):
     the_ifs = []
@@ -62,7 +62,6 @@ def gen_leg_b(ap, domain_size):
         then = []
         if ap.orders[i] > 1:
             then.append(c.Statement('l[1] = x[n]'))
-            #for j in range(ap.orders[i]+1):
             one = '(2*z-1)*x[n]*l[z-1] + '
             two = '(z-1)*l[z-2]'
             A = repr(1./ap.orders[i])
@@ -77,7 +76,7 @@ def gen_leg_b(ap, domain_size):
             if j == 0:
                 rvalue += repr(ap.coeff[i][j])
             elif j == 1:
-                rvalue += repr(ap.coeff[i][j]) + '*x[n]' 
+                rvalue += repr(ap.coeff[i][j]) + '*x[n]'
             elif j >= 2:
                 rvalue += repr(ap.coeff[i][j]) + '*l[{0}]'.format(j)
             if j != ap.orders[i]:
@@ -116,13 +115,14 @@ def gen_mono_v(ap):
     sub_string = "coeff[index*{0}+{1}]".format(max_or+1, max_or)
     for j in range(max_or)[::-1]:
         # using horner's method, this requires the for loop to be reversed
-        sub_string = "x[n]*(" + sub_string + ") + coeff[index*{0}+{1}]".format(max_or+1, j)
+        sub_string = "x[n]*(" + sub_string + \
+                     ") + coeff[index*{0}+{1}]".format(max_or+1, j)
     string += sub_string
     string += ";"
     return string
 
 
-# generate C code that evaluates chebyshev polynomials 
+# generate C code that evaluates chebyshev polynomials
 # according to the approximator class that is given.
 def gen_cheb_v(ap):
     # maximum possible order of representation
@@ -151,6 +151,7 @@ def gen_cheb_v(ap):
     string += "y[n] = s;"
     return string
 
+
 # generates vectorized legendre code without branching given an approximator
 def gen_leg_v(ap):
     # maximum possible order of representation
@@ -171,10 +172,10 @@ def gen_leg_v(ap):
         string += "coeff[index*{0}+{1}]*L1;".format(order+1, 1)
     if order > 1:
         string += "for (int j = 2; j <=" + repr(order) + "; j++) {"
-        string +=     "Ln = ((2.*j-1.)*x[n]*L1 - (j-1.)*L0)/{0};".format(order)
-        string +=     "s = s + coeff[index*{0} + j]*Ln;".format(order+1)
-        string +=     "L0 = L1;"
-        string +=     "L1 = Ln;"
+        string += "  Ln = ((2.*j-1.)*x[n]*L1 - (j-1.)*L0)/"+repr(order)+";"
+        string += "  s = s + coeff[index*{0} + j]*Ln;".format(order+1)
+        string += "  L0 = L1;"
+        string += "  L1 = Ln;"
         string += "}"
     string += "y[n] = s;"
     return string
@@ -193,7 +194,8 @@ def gen_mono_vb(ap):
         sub_string = repr(ap.ranges[i][1][-1])
         for j in range(len(ap.ranges)-1)[::-1]:
             # using horner's method, this requires the for loop to be reversed
-            sub_string = "x[n]*(" + sub_string + ") + " + repr(ap.ranges[i][1][j])
+            sub_string = "x[n]*(" + sub_string + ") + " \
+                          + repr(ap.ranges[i][1][j])
         string += sub_string
         string += ";"
         string += "}"
@@ -225,22 +227,25 @@ def run_c(x, string):
 
     prg = cl.Program(ctx, code).build()
 
-    #second parameter determines how many 'code instances' to make, (1, ) is 1
+    # second parameter determines how many 'code instances' to make, (1, ) is 1
     prg.sum(queue, x_dev.shape, None, x_dev.data, y_dev.data)
     return y_dev.get()
 
 
 # string is executable c code
 # x is the co-image of function
-def run_c_v(x, table, coeff, string):
+def run_c_v(x, approx, string):
+    coeff = approx.coeff
+    table = approx.midpoints
+
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
 
-    # turn coeff into 1 dimensional numpy array    
+    # turn coeff into 1 dimensional numpy array
     max_order = len(coeff[1])
     coeff_n = np.ones(len(coeff)*max_order).astype(np.float64)
     for i in range(len(coeff)*max_order):
-        coeff_n[i] = coeff[i/max_order][i%max_order]
+        coeff_n[i] = coeff[i/max_order][i % max_order]
 
     x_dev = cl_array.to_device(queue, x)
     table_dev = cl_array.to_device(queue, np.array(table).astype(np.float64))
@@ -253,15 +258,14 @@ def run_c_v(x, table, coeff, string):
     declaration += "__global double *y) "
     code = declaration + '{' + string + '}'
 
-    start = time.time()
     prg = cl.Program(ctx, code).build()
-    #second parameter determines how many 'code instances' to make, (1, ) is 1
-    prg.sum(queue, x_dev.shape, None, table_dev.data, coeff_dev.data, x_dev.data, y_dev.data)
-    print('Time to run C Code, ', time.time() - start)
+    # second parameter determines how many 'code instances' to make, (1, ) is 1
+    prg.sum(queue, x_dev.shape, None, table_dev.data,
+            coeff_dev.data, x_dev.data, y_dev.data)
 
     return y_dev.get()
-    
-    
+
+
 # use to save the generated code for later use
 def write_to_file(file_name, string):
     my_file = open("generated_code/"+file_name+".txt", "w")

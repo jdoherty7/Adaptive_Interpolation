@@ -137,9 +137,11 @@ class Interpolant(object):
     # with a given order an basis. Finds the relative error
     # using the infinity norm
     def find_error(self, coeff, a, b, basis, order):
-        # check 100 points per unit. This should give an error, relatively
-        # stable so long as dominant features are not smaller than this resolution
-        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2)).astype(np.float64)
+        # check 100 points per unit. This should give an error,
+        # relatively stable so long as dominant features are not
+        #  smaller than this resolution
+        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2))
+        eval_points = eval_points.astype(np.float64)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points, basis, order)
         # find maximum relative error in the given interval
@@ -150,25 +152,26 @@ class Interpolant(object):
     # this uses a specified order and basis function
     def adapt(self, a, b, index):
         # prevent from refining the interval too greatly
-        if (abs(b-a) < self.allowed_error):
+        if (abs(b-a) < min(self.allowed_error, 1e-10)):
             return
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
-        temp = self.interpolate(nodes, self.basis)#self.Remez(nodes)
-        if temp[0] != 0: 
+        # in new version replace with self.Remez(nodes)
+        temp = self.interpolate(nodes, self.basis)
+        if temp[0] != 0:
             coeff = temp
         else:
             print("Error assigning coeff", a, b)
             return
-        # append the coefficients and the range they are valid on to this array
-        # also the basis function and order of in this range
+        # append the coefficients and the range they are valid on to this
+        # array also the basis function and order of in this range
         self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b]], index)
-        # calculate the maximum relative error on the interval using these coefficients
+        # calculate the maximum relative error on the interval
+        # using these coefficients
         this_error = self.find_error(coeff, a, b, self.basis, self.max_order)
-        # print(this_error, self.basis)
-        # if error is larger than maximum allowed relative error then refine the interval
-        # if dom
+        # if error is larger than maximum allowed relative error
+        # then refine the interval
         if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
             self.adapt(a, (a+b)/2., 2*index)
@@ -197,7 +200,7 @@ class Interpolant(object):
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
-        #need to check that all these variables are actually assigned
+        # need to check that all these variables are actually assigned
         if coeff[0] == 0:
             return
         # turn into max_order interpolant so it can run using
@@ -207,12 +210,11 @@ class Interpolant(object):
         self.add_to_heap([(a+b)/2., padded, self.basis, [a, b]], index)
         # if there is a discontinuity then b-a will be very small
         # but the error will still be quite large, the resolution
-        # the second term combats that. 
-        if (min_error > self.allowed_error):# or ((abs(b-a) < 1e-3)):
+        # the second term combats that.
+        if (min_error > self.allowed_error):
             # adapt on the left subinterval and right subinterval
             self.variable_order_adapt(a, (a+b)/2., 2*index)
             self.variable_order_adapt((a+b)/2., b, 2*index + 1)
-
 
     # Method to run the adaptive method initially
     def run_adapt(self, lower_bound, upper_bound, variable_order=False):
@@ -225,9 +227,9 @@ class Interpolant(object):
 
 
 # function that creates and then runs an adaptive method.
-def adaptive(function, lower_bound, upper_bound, error, node_choice, \
-             order, interpolant_choice):
-    my_adapt = Interpolant(function, error, order, node_choice, \
+def adaptive(function, lower_bound, upper_bound, error, node_choice,
+             order, interpolant_choice, variable=False):
+    my_adapt = Interpolant(function, error, order, node_choice,
                            interpolant_choice)
-    my_adapt.run_adapt(lower_bound, upper_bound)
+    my_adapt.run_adapt(lower_bound, upper_bound, variable)
     return my_adapt

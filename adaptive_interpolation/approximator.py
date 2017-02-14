@@ -10,6 +10,7 @@ interpolant choices, etc.
 """
 import numpy as np
 
+
 # class to evaluate an adaptive interpolant that has different
 # coefficients on different ranges
 class Approximator(object):

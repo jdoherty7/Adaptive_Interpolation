@@ -12,13 +12,14 @@ import numpy.linalg as la
 import scipy.special as spec
 import approximator as app
 import matplotlib.pyplot as plt
+import adaptive_interpolation as ai
 
 
 # bessel function for testing
 def f(x):
     return spec.jn(0, x)
-    #return x**2 - 10.*x**1 + 25.*x**0
-    #return 0 + 0*x + (.5*(3*x**2 - 1))
+    # return x**2 - 10.*x**1 + 25.*x**0
+    # return 0 + 0*x + (.5*(3*x**2 - 1))
     # it takes 40s to graph n =20 with 5e5 points
 
 
@@ -95,8 +96,7 @@ def Testing(a, b, func, max_order, max_error):
     print("Evaluating the Approximation")
     code = generate.gen_cheb_v(my_approximation)
     start = time.time()
-    estimated_values = generate.run_c_v(x, my_approximation.midpoints, \
-                                        my_approximation.coeff, code)
+    estimated_values = generate.run_c_v(x, my_approximation, code)
     #estimated_values = my_approximation.evaluate(x)
     eval_time = time.time() - start
 
@@ -139,6 +139,32 @@ def Testing(a, b, func, max_order, max_error):
 def test_parallel_methods(approx):
     pass
 
+def ai_func_tests():
+    a, b = 0, 20
+    my_approximator = ai.make_chebyshev_interpolant(a, b, f, 20, 1e-9)
+    code = ai.generate_code(my_approximator)
+    print(code)
+    x = np.linspace(a, b, 1e2).astype(np.float64)
+    est = ai.run_code(code, x, my_approximator)
+    #est = my_approximator.evaluate(x)
+    true = f(x)
+    my_plot(x, true, est, abs(true-est))
+
+
+def dem_vary():
+    a, b = 0, 10
+    my_approximator = ai.make_chebyshev_interpolant(a, b, f1, 10, 1e-4, True)
+    code = ai.generate_code(my_approximator)
+    print(code)
+    x = np.linspace(a, b, 1e5).astype(np.float64)
+    est = ai.run_code(code, x, my_approximator)
+    #est = my_approximator.evaluate(x)
+    true = f1(x)
+    my_plot(x, true, est, abs(true-est))
+
+
 # run the main program
 if __name__ == "__main__":
-    Testing(0, 5, f, 30, 1e-14)
+    #Testing(0, 5, f, 30, 1e-14)
+    #ai_func_tests()
+    dem_vary()
