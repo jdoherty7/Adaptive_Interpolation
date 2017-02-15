@@ -54,7 +54,7 @@ def my_plot(x, actual, approximation, abs_errors):
     plt.figure()
     plt.yscale('log')
     plt.title('Absolute Error in Interpolated Values')
-    plt.plot(x, abs_errors, 'gs')
+    plt.plot(x, abs_errors+1e-17, 'gs')
 
     plt.show()
 
