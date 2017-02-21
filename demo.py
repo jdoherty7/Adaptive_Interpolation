@@ -64,7 +64,7 @@ def my_plot(x, actual, approximation, abs_errors, allowed_error, ap):
 
 
 def demo_adapt(with_pyopencl=True):
-    a, b, allowed_error = 0, 10, 1e-12
+    a, b, allowed_error = 0, 20, 1e-12
     print("Creating Interpolant")
     my_approx = adapt_i.make_chebyshev_interpolant(a, b, f, 40, allowed_error)
     code = 0
@@ -102,4 +102,4 @@ def demo_adapt_variable(with_pyopencl=True):
 # run the main program
 if __name__ == "__main__":
     demo_adapt(False)
-    #demo_adapt_variable(False)
+    demo_adapt_variable(False)
