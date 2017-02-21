@@ -10,6 +10,7 @@ config = {
     'author' : 'John Doherty',
     'version' : '0.1',
     'license' : 'MIT',
+    'url' : 'https://www.github.com/jdoherty7/Adaptive_Interpolation',
     'install_requires': ['nose', 'numpy', 'matplotlib', \
     'pyopencl', 'scipy', 'cgen'],
     'packages': ['adaptive_interpolation', 'tests'],
