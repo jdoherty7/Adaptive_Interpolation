@@ -5,14 +5,15 @@ the evaluation of said interpolant
 This is now faster than default bessel approximation!
 """
 import time
+import adapt
 import generate
 import numpy as np
-import adapt
+from nose.tools import *
 import numpy.linalg as la
-import scipy.special as spec
 import approximator as app
+import scipy.special as spec
 import matplotlib.pyplot as plt
-import adaptive_interpolation as ai
+import adaptive_interpolation as adapt_i
 
 
 # bessel function for testing
@@ -59,112 +60,46 @@ def my_plot(x, actual, approximation, abs_errors):
     plt.show()
 
 
-# Funtion to test the code base
-# a is the lower bound and b is the upper bound while func is the function
-# being approximated. Max order is the maximum allowed order of the
-# interpolant while max_error is the maximum relative error allowed 
-# the error is with respect to the infinity norm)
-def Testing(a, b, func, max_order, max_error):
-    # this is set as so because double precision digits are used.    
-    if max_error < 1e-15:
-        max_error = 1e-15
-    
-    # interpolant parameters
-    # maximum error allowed in the approximation
-    err = max_error
-    # node type used random and cheb are options, otherwise equispaced is used
-    nt = 'chebyshev'
-    # order of the monomial interpolant to be used
-    order = max_order
-    # sine, chebyshev, legendre, or monomials
-    interp_choice = 'chebyshev'
-
-    start = time.time()
-    print("Start adaptive interpolation")
-    my_adapt_class = adapt.adaptive(func, a, b, err, nt, order, interp_choice)
-    al_time = time.time() - start
-
-    #the choice of interpolation is not currently implemented. monomials is default
-    start = time.time()
-    print("Building Approximator")
-    my_approximation = app.Approximator(my_adapt_class)
-    setup_time = time.time() - start
-
-    # evaluate the interpolated approximation on values in x
-    size = 1e4
-    x = np.linspace(a, b, size).astype(np.float64)
-    print("Evaluating the Approximation")
-    code = generate.gen_cheb_v(my_approximation)
-    start = time.time()
-    estimated_values = generate.run_c_v(x, my_approximation, code)
-    #estimated_values = my_approximation.evaluate(x)
-    eval_time = time.time() - start
-
-    # calculate errors in the approximation and actual values
-    start = time.time()
-    print("Evaluating the Function")
-    actual_values = func(x)
-    their_time = time.time() - start
-    abs_errors = np.abs(actual_values - estimated_values)
-    rel_error = la.norm(abs_errors, np.inf)/la.norm(actual_values, np.inf)
-
-    max_abs_error = np.max(abs_errors)
-    avg_abs_error = np.sum(abs_errors)/(len(abs_errors))
-
-    print()
-    print("x size: ", size)
-    print("max_order: ", order) 
-    print("node choice: ", nt)
-    print()
-    print("-------------------TIMES-------------------------------")
-    print("NOTE: The asymptotic values of the function evaluations")
-    print("is what is important, which is not well represented here.")
-    print("Time to run adaptive algorithm            : ", al_time)
-    print("Time to construct approximation class     : ", setup_time)
-    print("Time to evaluate the approximation  (MINE): ", eval_time)
-    print("Time to evaluate precise function (THEIRS): ", their_time)
-    print()
-    print("----------------ERRORS---------------------------------")
-    print("Maximum absolute error: ", max_abs_error)
-    print("Average absolute error: ", avg_abs_error)
-    print("Maximum relative error: ", rel_error)
-    print()
-
-    my_plot(x, actual_values, estimated_values, abs_errors)
-
-
 # Given a specific Approximator class, this will test how the
 # performance and accuracy varies when the code is varied from branching
 # and vectorized to not branching and not vectorized
 def test_parallel_methods(approx):
-    pass
+    size = 1e6
+    interval = approx.heap[1][3]
+	x = np.linspace(interval[0], inverval[1], size).astype(np.float64)
+    nb_nv = adapt_i.generate_code(approx, 0, 0)
+    nb_v  = adapt_i.generate_code(approx, 0, 1)
+    b_nv  = adapt_i.generate_code(approx, 1, 0, size)
+    b_v   = adapt_i.generate_code(approx, 1, 1, size)
 
-def ai_func_tests():
-    a, b = 0, 20
-    my_approximator = ai.make_chebyshev_interpolant(a, b, f, 20, 1e-9)
-    code = ai.generate_code(my_approximator)
-    print(code)
-    x = np.linspace(a, b, 1e2).astype(np.float64)
-    est = ai.run_code(code, x, my_approximator)
-    #est = my_approximator.evaluate(x)
-    true = f(x)
-    my_plot(x, true, est, abs(true-est))
+    # time these tests and return times
+    val_00 = run_code(nb_nv, x, approx=0, vectorized=False)
+    val_01 = run_code(nb_v,  x, approx,   vectorized=True)
+    val_10 = run_code(b_nv,  x, approx=0, vectorized=False)
+    val_11 = run_code(b_v,   x, approx,   vectorized=True)
+	
+	
+def test_exact_interpolants():
+    order1 = lambda x: 3*x + 7
+    order4 = lambda x: 4.123*x**4 - 5.6*x**3 - x**2 + 4.5
+    order6 = lambda x: x**6 - 3*x**5 - 2*x**4 + x - 3
+    order8 = lambda x: x**8 - 42*x**7 + 7.5*x**5 - 4.1234*x**4  - 1.2*x**2
 
+    x = np.linspace(a, b, 100).astype(np.float64)
+    est1 = adapt_i.make_monomial_interpolant(a,b,order1,1,1e-9).evaluate(x)
+    est4 = adapt_i.make_monomial_interpolant(a,b,order4,4,1e-9).evaluate(x)
+    est6 = adapt_i.make_monomial_interpolant(a,b,order6,6,1e-9).evaluate(x)
+    est8 = adapt_i.make_monomial_interpolant(a,b,order8,8,1e-9).evaluate(x)
+	
+    assert la.norm(est1-order1(x), np.inf)/la.norm(order1(x), np.inf) < 1e-14
+    assert la.norm(est4-order4(x), np.inf)/la.norm(order4(x), np.inf) < 1e-14
+    assert la.norm(est6-order6(x), np.inf)/la.norm(order6(x), np.inf) < 1e-14
+    assert la.norm(est8-order8(x), np.inf)/la.norm(order8(x), np.inf) < 1e-14
 
-def dem_vary():
-    a, b = 0, 10
-    my_approximator = ai.make_chebyshev_interpolant(a, b, f1, 10, 1e-4, True)
-    code = ai.generate_code(my_approximator)
-    print(code)
-    x = np.linspace(a, b, 1e5).astype(np.float64)
-    est = ai.run_code(code, x, my_approximator)
-    #est = my_approximator.evaluate(x)
-    true = f1(x)
-    my_plot(x, true, est, abs(true-est))
 
 
 # run the main program
 if __name__ == "__main__":
     #Testing(0, 5, f, 30, 1e-14)
     #ai_func_tests()
-    dem_vary()
+    test_exact_interpolants()

@@ -44,59 +44,62 @@ def f1(x0):
 
 
 # plot the absolute errors as well as the actual and approximated functions
-def my_plot(x, actual, approximation, abs_errors, allowed_error, ap_ranges):
+def my_plot(x, actual, approximation, abs_errors, allowed_error, ap):
     plt.figure()
     plt.title('Actual and Approximate values Graphed')
-    plt.plot(x, actual, 'r')
-    plt.plot(x, approximation, 'b')
+    t, = plt.plot(x, actual, 'r', label='True Values')
+    e, = plt.plot(x, approximation, 'b', label='Interpolated Values')
+    plt.legend(handles=[t, e], loc=0)
 
     plt.figure()
     plt.yscale('log')
     plt.title('Absolute Error in Interpolated Values')
-    plt.plot(x, abs_errors+1e-17, 'gs')
-    plt.plot(x, 0*x + allowed_error, 'r')
-    ranges = []
-    for r in ap_ranges:
-        try:
-            ranges.append(r[0])
-            ranges.append(r[1])
-        except:
-            pass
-    print allowed_error, ranges
-    plt.plot(ranges, 0*np.array(ranges) + allowed_error, 'bs')
+    a, = plt.plot(x, abs_errors+1e-17, 'g', label='Absolute Errors')
+    b, = plt.plot(x, 0*x + allowed_error, 'r', label='Maximum Allowed Relative Error')
+    for val in list(set(ap.ranges)):
+        plt.axvline(x=val)
+    c, = plt.plot(ap.used_midpoints, ap.rel_errors, 'bs', label='Relative Errors')
+    plt.legend(handles=[a, b, c], loc=0, fontsize='small')
     plt.show()
 
 
 def demo_adapt(with_pyopencl=True):
-    a, b, allowed_error = 0, 20, 1e-9
-    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f, 20, allowed_error)
+    a, b, allowed_error = 0, 10, 1e-12
+    print("Creating Interpolant")
+    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f, 40, allowed_error)
+    code = 0
     code = adapt_i.generate_code(my_approx)
     print(code)
+    print("Evaluating Interpolant")
+    x = np.linspace(a, b, 1e3).astype(np.float64)
+    if with_pyopencl:
+        est = adapt_i.run_code(code, x, my_approx)
+    else:
+        est = my_approx.evaluate(x)
+    print("Evaluating Function")
+    true = f(x)
+    my_plot(x, true, est, abs(true-est), allowed_error, my_approx)
+
+
+def demo_adapt_variable(with_pyopencl=True):
+    a, b, allowed_error = 0, 10, 1e-5
+    print("Creating Interpolant")
+    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f1, 7, allowed_error, True)
+    code = 0
+    code = adapt_i.generate_code(my_approx)
+    print(code)
+    print("Evaluating Interpolant")
     x = np.linspace(a, b, 1e2).astype(np.float64)
     if with_pyopencl:
         est = adapt_i.run_code(code, x, my_approx)
     else:
         est = my_approx.evaluate(x)
-    true = f(x)
-    my_plot(x, true, est, abs(true-est), allowed_error, my_approx.ranges)
-
-
-def demo_adapt_variable(with_pyopencl=True):
-    a, b, allowed_error = 0, 10, 1e-5
-    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f1, 5, allowed_error, True)
-    code = adapt_i.generate_code(my_approx)
-    print(code)
-    x = np.linspace(a, b, 1e5).astype(np.float64)
-    if with_pyopencl:
-        est = adapt_i.run_code(code, x, my_approx)
-    else:
-        est = my_approx.evaluate(x)
+    print("Evaluating Function")
     true = f1(x)
-    my_plot(x, true, est, abs(true-est), allowed_error, my_approx.ranges)
+    my_plot(x, true, est, abs(true-est), allowed_error, my_approx)
 
 
 # run the main program
 if __name__ == "__main__":
-    #Testing(0, 5, f, 30, 1e-14)
-    demo_adapt()
-    #demo_adapt_variable()
+    demo_adapt(False)
+    #demo_adapt_variable(False)

@@ -161,12 +161,12 @@ class Interpolant(object):
         else:
             print("Error assigning coeff", a, b)
             return
-        # append the coefficients and the range they are valid on to this
-        # array also the basis function and order of in this range
-        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b]], index)
         # calculate the maximum relative error on the interval
         # using these coefficients
         this_error = self.find_error(coeff, a, b, self.max_order)
+        # append the coefficients and the range they are valid on to this
+        # array also the basis function and order of in this range
+        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
         # if error is larger than maximum allowed relative error
         # then refine the interval
         if (this_error > self.allowed_error):
@@ -200,7 +200,7 @@ class Interpolant(object):
         # same generative code
         padded = np.zeros((self.max_order+1,))
         padded[:coeff.shape[0]] = coeff
-        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b]], index)
+        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b], min_error], index)
         # if there is a discontinuity then b-a will be very small
         # but the error will still be quite large, the resolution
         # the second term combats that.

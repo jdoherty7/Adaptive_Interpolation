@@ -23,10 +23,12 @@ class Approximator(object):
         self.code = 0
         self.max_order = adapt.max_order
         self.num_levels = int(np.log(len(self.heap))/np.log(2))
-        self.midpoints, self.coeff = self.make_trees()
-        self.ranges = self.heap[-2**(self.num_levels-1):]
+        self.midpoints, self.coeff = self.make_mid_coeff()
+        self.used_coeff = self.heap[-2**(self.num_levels-1):]
+        self.ranges, self.rel_errors = self.make_ranges_err()
+        self.used_midpoints = self.midpoints[-2**(self.num_levels-1):]
 
-    def make_trees(self):
+    def make_mid_coeff(self):
         midpoints = [0]
         # initialize first element as coeff vector of 0 values
         # assume that all coeff vectors are numpy arrays in heap
@@ -36,6 +38,18 @@ class Approximator(object):
             midpoints.append(self.heap[i][0])
             coeff.append(self.heap[i][1])
         return midpoints, coeff
+
+    def make_ranges_err(self):
+        ranges = []
+        rel = []
+        for r in self.used_coeff:
+            try:
+                ranges.append(r[3][0])
+                ranges.append(r[3][1])
+                rel.append(r[4])
+            except:
+                pass
+        return ranges, rel
 
     def get_index(self, x_val):
         # start at index 1
@@ -75,4 +89,4 @@ class Approximator(object):
             # that are givent for the calculated array
             val = np.dot(np.array(coeff), xs)
             new_x.append(val)
-        return new_x
+        return np.array(new_x)

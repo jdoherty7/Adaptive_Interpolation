@@ -1,9 +1,9 @@
 """
 Main methods used in the adaptive_interpolation library
 """
+import adapt
 import generate
 import numpy as np
-import adapt
 import approximator as app
 
 
