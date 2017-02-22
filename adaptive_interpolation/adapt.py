@@ -2,6 +2,8 @@
 New adaptive interpolation with better adaptive method
 """
 
+from __future__ import division
+
 import numpy as np
 import numpy.linalg as la
 
@@ -25,7 +27,7 @@ class Interpolant(object):
         for i in range(len(self.heap)):
             if self.heap[i] == 0:
                 # if empty then equate to its parent, ints will round down.
-                self.heap[i] = self.heap[i/2]
+                self.heap[i] = self.heap[i//2]
 
     # function to add data to the heap
     def add_to_heap(self, data, index):
@@ -46,27 +48,27 @@ class Interpolant(object):
     # function to evaluate Legendre polynomials of a number, x, up to order n
     def legendre(self, n, x):
         if n == 0:
-            return np.array([1.])
+            return np.array([1.], dtype=np.float64)
         elif n == 1:
-            return np.array([1., x])
+            return np.array([1., x], dtype=np.float64)
         elif n > 1:
-            L = [1., x]
+            L = [np.float64(1.), np.float64(x)]
             for i in range(2, n+1):
-                first_term = (2*i-1)*x*L[i-1]
-                second_term = (i-1)*L[i-2]
+                first_term = np.float64(2*i-1)*np.float64(x)*L[i-1]
+                second_term = np.float64(i-1)*L[i-2]
                 L.append((first_term + second_term)*(1./n))
             return np.array(L)
 
     # function to evaluate chebyshev polynomials of a value x up to order n
     def chebyshev(self, n, x):
         if n == 0:
-            return np.array([1.])
+            return np.array([1.], dtype=np.float64)
         elif n == 1:
-            return np.array([1., x])
+            return np.array([1., x], dtype=np.float64)
         elif n > 1:
-            C = [1., x]
+            C = [np.float64(1.), np.float64(x)]
             for i in range(2, n+1):
-                C.append(2*x*C[i-1] - C[i-2])
+                C.append(np.float64(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
     # evaluate the given basis function for whatever order given
@@ -78,7 +80,7 @@ class Interpolant(object):
         elif (basis == 'chebyshev'):
             return self.chebyshev(order, x)
         else:
-            return np.array([x**i for i in range(order+1)])
+            return np.array([x**i for i in range(order+1)], dtype=np.float64)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array
@@ -89,13 +91,13 @@ class Interpolant(object):
             xs = self.basis_function(x0, order, basis)
             val = np.dot(coeff, xs)
             my_vals.append(val)
-        return np.array(my_vals)
+        return np.array(my_vals, dtype=np.float64)
 
     # gets n chebyshev nodes from a to b
     def get_cheb(self, a, b, n):
         if n == 1:
-            return np.array([(a+b)/2.]).astype(np.float64)
-        k = np.array(range(1, int(n) + 1)[::-1])
+            return np.array([(a+b)/2.], dtype=np.float64)
+        k = np.array(range(1, int(n) + 1)[::-1], dtype=np.float64)
         nodes = np.cos((2.*k - 2.)*np.pi/(2.*int(n-1)))
         # change range from -1 to 1 to a to b
         nodes = (b-a)*.5*(nodes + 1.) + a
@@ -110,19 +112,19 @@ class Interpolant(object):
         # choose nodes at random
         # beta function is used to prefer points near edges
         elif self.node_choice == 'random':
-            nodes = (b-a)*np.random.beta(.5, .5, node_number) + a
+            nodes = (b-a)*np.random.beta(.5, .5, node_number, dtype=np.float64) + a
             # make sure endpoints are properly set
             nodes[0], nodes[-1] = a, b
         # otherwise, create equispaced nodes
         else:
-            nodes = np.linspace(a, b, node_number, endpoint=True)
-        return nodes.astype(np.float64)
+            nodes = np.linspace(a, b, node_number, endpoint=True, dtype=np.float64)
+        return nodes
 
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
     def interpolate(self, nodes, basis):
         length = len(nodes)
-        V = np.outer(np.ones(length), np.ones(length)).astype(np.float64)
+        V = np.outer(np.ones(length), np.ones(length), dtype=np.float64)
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis)
@@ -138,8 +140,8 @@ class Interpolant(object):
         # check 100 points per unit. This should give an error,
         # relatively stable so long as dominant features are not
         #  smaller than this resolution
-        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2))
-        eval_points = eval_points.astype(np.float64)
+        num_points = max(abs(b-a)*100, self.max_order*100)
+        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2), dtype=np.float64)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points, self.basis, order)
         # find maximum relative error in the given interval
@@ -150,7 +152,9 @@ class Interpolant(object):
     # this uses a specified order and basis function
     def adapt(self, a, b, index):
         # prevent from refining the interval too greatly
-        if (abs(b-a) < min(self.allowed_error, 1e-10)): return
+        if (abs(b-a) < min(self.allowed_error, 1e-10)):
+            raise ValueError('Recursed too far. Try higher order interpolant \
+                              , or lower your precision')
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
@@ -159,7 +163,8 @@ class Interpolant(object):
         if temp[0] != 0:
             coeff = temp
         else:
-            print("Error assigning coeff", a, b)
+            raise ValueError("Singular Matrix obtained on \
+                              bounds, {0}, {1}".format(a, b))
             return
         # calculate the maximum relative error on the interval
         # using these coefficients
@@ -222,7 +227,8 @@ class Interpolant(object):
 # function that creates and then runs an adaptive method.
 def adaptive(function, lower_bound, upper_bound, error, node_choice,
              order, interpolant_choice, variable=False):
-    my_adapt = Interpolant(function, error, order, node_choice,
-                           interpolant_choice)
-    my_adapt.run_adapt(lower_bound, upper_bound, variable)
+    my_adapt = Interpolant(function, np.float64(error), np.float64(order), \
+		           node_choice, interpolant_choice)
+    my_adapt.run_adapt(np.float64(lower_bound), \
+		       np.float64(upper_bound), variable)
     return my_adapt

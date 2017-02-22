@@ -1,10 +1,10 @@
 """
 Main methods used in the adaptive_interpolation library
 """
-import adapt
 import generate
 import numpy as np
-import approximator as app
+import adaptive_interpolation.adapt as adapt
+import adaptive_interpolation.approximator as app
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
@@ -16,7 +16,8 @@ def make_monomial_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'monomial'
 
-    adapt_class = adapt.adaptive(func, a, b, error, nt, order,
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
+                                 np.float64(error), nt, np.float64(order),
                                  interp_choice, variable)
     return app.Approximator(adapt_class)
 
@@ -31,9 +32,10 @@ def make_chebyshev_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'chebyshev'
 
-    adapt_class = adapt.adaptive(func, a, b, error, nt, order,
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
+                                 np.float64(error), nt, np.float64(order),
                                  interp_choice, variable)
-    return app.Approximator(adapt_class)
+   return app.Approximator(adapt_class)
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
@@ -46,9 +48,10 @@ def make_legendre_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'legendre'
 
-    adapt_class = adapt.adaptive(func, a, b, error, nt, order,
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
+                                 np.float64(error), nt, np.float64(order),
                                  interp_choice, variable)
-    return app.Approximator(adapt_class)
+   return app.Approximator(adapt_class)
 
 
 # Given an approximator class returned from a make an interpolant function,

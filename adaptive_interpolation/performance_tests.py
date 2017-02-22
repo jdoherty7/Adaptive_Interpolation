@@ -4,24 +4,22 @@ the evaluation of said interpolant
 
 This is now faster than default bessel approximation!
 """
+from nose.tools import *
+
 import time
-import adapt
 import generate
 import numpy as np
-from nose.tools import *
 import numpy.linalg as la
-import approximator as app
 import scipy.special as spec
 import matplotlib.pyplot as plt
-import adaptive_interpolation as adapt_i
+import adaptive_interpolation.adapt as adapt
+import adaptive_interpolation.approximator as app
+import adaptive_interpolation.adaptive_interpolation as adapt_i
 
 
 # bessel function for testing
 def f(x):
     return spec.jn(0, x)
-    # return x**2 - 10.*x**1 + 25.*x**0
-    # return 0 + 0*x + (.5*(3*x**2 - 1))
-    # it takes 40s to graph n =20 with 5e5 points
 
 
 # a function for testing

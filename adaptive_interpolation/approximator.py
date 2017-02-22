@@ -82,11 +82,11 @@ class Approximator(object):
             index = self.get_index(x0)
             coeff = self.heap[index][1]
             basis = self.heap[index][2]
-            order = len(coeff) - 1
+            order = np.float64(len(coeff) - 1)
             # evaluate the given basis function
             xs = self.adapt.basis_function(x0, order, basis)
             # multiply the calculated basis by their coefficients
             # that are givent for the calculated array
             val = np.dot(np.array(coeff), xs)
             new_x.append(val)
-        return np.array(new_x)
+        return np.array(new_x, dtype=np.float64)
