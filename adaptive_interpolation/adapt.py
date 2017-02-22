@@ -116,7 +116,7 @@ class Interpolant(object):
         # otherwise, create equispaced nodes
         else:
             nodes = np.linspace(a, b, node_number, endpoint=True)
-        return nodes
+        return nodes.astype(np.float64)
 
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
@@ -126,34 +126,31 @@ class Interpolant(object):
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis)
-        try:
-            coeff = la.solve(V, self.function(nodes))
-            return coeff
-        except:
-            # there is a singular matrix probably
-            return [0]
+        # try to solve for coefficients, if there is a singular matrix
+        # or some other error then return [0] to indicate an error
+        try: return la.solve(V, self.function(nodes))
+        except: return [0]
 
     # find the error of given coefficients on interval a, b
     # with a given order an basis. Finds the relative error
     # using the infinity norm
-    def find_error(self, coeff, a, b, basis, order):
+    def find_error(self, coeff, a, b, order):
         # check 100 points per unit. This should give an error,
         # relatively stable so long as dominant features are not
         #  smaller than this resolution
         eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2))
         eval_points = eval_points.astype(np.float64)
         actual = self.function(eval_points)
-        approx = self.eval_coeff(coeff, eval_points, basis, order)
+        approx = self.eval_coeff(coeff, eval_points, self.basis, order)
         # find maximum relative error in the given interval
-        max_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
-        return max_error
+        rel_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
+        return rel_error
 
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
     def adapt(self, a, b, index):
         # prevent from refining the interval too greatly
-        if (abs(b-a) < min(self.allowed_error, 1e-10)):
-            return
+        if (abs(b-a) < min(self.allowed_error, 1e-10)): return
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
@@ -164,12 +161,12 @@ class Interpolant(object):
         else:
             print("Error assigning coeff", a, b)
             return
-        # append the coefficients and the range they are valid on to this
-        # array also the basis function and order of in this range
-        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b]], index)
         # calculate the maximum relative error on the interval
         # using these coefficients
-        this_error = self.find_error(coeff, a, b, self.basis, self.max_order)
+        this_error = self.find_error(coeff, a, b, self.max_order)
+        # append the coefficients and the range they are valid on to this
+        # array also the basis function and order of in this range
+        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
         # if error is larger than maximum allowed relative error
         # then refine the interval
         if (this_error > self.allowed_error):
@@ -181,33 +178,29 @@ class Interpolant(object):
     # this checks multiple orders to make an interpolant
     def variable_order_adapt(self, a, b, index):
         # recursed too far
-        if (abs(b-a) < self.allowed_error):
-            return
+        if (abs(b-a) < self.allowed_error): return
         min_error = 1e100
-        # check all the interpolant possibillities and orders to find the
-        # best one that runs
+        # check all the interpolant possibillities and orders to
+        # find the best one that runs
         coeff = [0]
         # check orders 0 to max_order
         for curr_order in range(self.max_order+1):
             # only the monomial choice can be evaluated in the
-            # for choice in ['chebyshev', 'legendre', 'sine', 'monomials']:
             nodes = self.get_nodes(a, b, curr_order)
             curr_coeff = self.interpolate(nodes, self.basis)
             # if you get a singular matrix, break the for loop
-            if curr_coeff[0] == 0:
-                break
-            error = self.find_error(curr_coeff, a, b, self.basis, curr_order)
+            if curr_coeff[0] == 0: break
+            error = self.find_error(curr_coeff, a, b, curr_order)
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
         # need to check that all these variables are actually assigned
-        if coeff[0] == 0:
-            return
+        if coeff[0] == 0: return
         # turn into max_order interpolant so it can run using
         # same generative code
         padded = np.zeros((self.max_order+1,))
         padded[:coeff.shape[0]] = coeff
-        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b]], index)
+        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b], min_error], index)
         # if there is a discontinuity then b-a will be very small
         # but the error will still be quite large, the resolution
         # the second term combats that.
