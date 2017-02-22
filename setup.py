@@ -10,8 +10,8 @@ config = {
     'author' : 'John Doherty',
     'version' : '0.1',
     'install_requires': ['nose', 'numpy', 'matplotlib', \
-    'pyopencl', 'scipy', 'cgen']
-    'packages'; ['ADAPT'],
+    'pyopencl', 'scipy', 'cgen'],
+    'packages': ['adaptive_interpolation'],
     'name': 'adaptive_interpolation'
 
 }
