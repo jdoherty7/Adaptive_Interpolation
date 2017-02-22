@@ -8,10 +8,10 @@ import numpy as np
 import numpy.linalg as la
 import scipy.special as spec
 import matplotlib.pyplot as plt
-from adaptive_interpolation import adapt
-from adaptive_interpolation import generate
-from adaptive_interpolation import approximator as app
-from adaptive_interpolation import adaptive_interpolation as adapt_i
+import adaptive_interpolation.adaptive_interpolation as adapt
+import adaptive_interpolation.adaptive_interpolation as generate
+import adaptive_interpolation.adaptive_interpolation as app
+import adaptive_interpolation.adaptive_interpolation as adapt_i
 
 
 # bessel function for testing
