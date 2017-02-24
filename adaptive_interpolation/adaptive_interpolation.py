@@ -1,10 +1,10 @@
 """
 Main methods used in the adaptive_interpolation library
 """
-import generate
 import numpy as np
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
+import adaptive_interpolation.generate as generate
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
@@ -16,8 +16,8 @@ def make_monomial_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'monomial'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
-                                 np.float64(error), nt, np.float64(order),
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
+                                 np.float64(error), nt, np.float64(order), \
                                  interp_choice, variable)
     return app.Approximator(adapt_class)
 
@@ -32,10 +32,10 @@ def make_chebyshev_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'chebyshev'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
-                                 np.float64(error), nt, np.float64(order),
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
+                                 np.float64(error), nt, np.float64(order), \
                                  interp_choice, variable)
-   return app.Approximator(adapt_class)
+    return app.Approximator(adapt_class)
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
@@ -48,10 +48,10 @@ def make_legendre_interpolant(a, b, func, order, error, variable=False):
     # chebyshev, legendre, or monomials
     interp_choice = 'legendre'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), 
-                                 np.float64(error), nt, np.float64(order),
+    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
+                                 np.float64(error), nt, np.float64(order), \
                                  interp_choice, variable)
-   return app.Approximator(adapt_class)
+    return app.Approximator(adapt_class)
 
 
 # Given an approximator class returned from a make an interpolant function,
@@ -61,9 +61,11 @@ def make_legendre_interpolant(a, b, func, order, error, variable=False):
 # is not vectorized then a domain_size must be given to the function
 def generate_code(approx, branching=0, vectorized=1, domain_size=None):
     if (vectorized == 0) and (domain_size is None):
-        print("Please enter the number of points that will \
-               be evaluated in domain_size.")
+        string_err = "Please enter the number of points"
+        string_err+= "that will be evaluated in domain_size."
+        print(string_err)
         return 0
+    code = 0
     if approx.basis == 'monomials':
         if not branching:
             if vectorized:

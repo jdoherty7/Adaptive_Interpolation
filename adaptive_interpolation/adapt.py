@@ -14,6 +14,11 @@ class Interpolant(object):
     def __init__(self, f, error, order, node_choice, interpolant_choice):
         # function pass, must be vectorized
         self.function = f
+        self.lower_bound = 0
+        self.upper_bound = 0
+        # max number of recursion levels allowed for adaption
+        # 34 reaches a spacing of 10**-15
+        self.max_recur = 10
         # max order allwed to create interpolation
         self.max_order = order
         # string specifying node choice
@@ -53,7 +58,7 @@ class Interpolant(object):
             return np.array([1., x], dtype=np.float64)
         elif n > 1:
             L = [np.float64(1.), np.float64(x)]
-            for i in range(2, n+1):
+            for i in range(2, int(n+1)):
                 first_term = np.float64(2*i-1)*np.float64(x)*L[i-1]
                 second_term = np.float64(i-1)*L[i-2]
                 L.append((first_term + second_term)*(1./n))
@@ -67,7 +72,7 @@ class Interpolant(object):
             return np.array([1., x], dtype=np.float64)
         elif n > 1:
             C = [np.float64(1.), np.float64(x)]
-            for i in range(2, n+1):
+            for i in range(2, int(n+1)):
                 C.append(np.float64(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
@@ -80,7 +85,7 @@ class Interpolant(object):
         elif (basis == 'chebyshev'):
             return self.chebyshev(order, x)
         else:
-            return np.array([x**i for i in range(order+1)], dtype=np.float64)
+            return np.array([x**i for i in range(int(order)+1)], dtype=np.float64)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array
@@ -124,7 +129,7 @@ class Interpolant(object):
     # evaluation and nodes to evaluate the function at.
     def interpolate(self, nodes, basis):
         length = len(nodes)
-        V = np.outer(np.ones(length), np.ones(length), dtype=np.float64)
+        V = np.outer(np.ones(length), np.ones(length))
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis)
@@ -137,10 +142,10 @@ class Interpolant(object):
     # with a given order an basis. Finds the relative error
     # using the infinity norm
     def find_error(self, coeff, a, b, order):
-        # check 100 points per unit. This should give an error,
+        # check 1000 points per unit. This should give an error,
         # relatively stable so long as dominant features are not
-        #  smaller than this resolution
-        num_points = max(abs(b-a)*100, self.max_order*100)
+        # smaller than this resolution
+        num_points = max(abs(b-a)*1000, self.max_order*100)
         eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2), dtype=np.float64)
         actual = self.function(eval_points)
         approx = self.eval_coeff(coeff, eval_points, self.basis, order)
@@ -148,13 +153,27 @@ class Interpolant(object):
         rel_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
         return rel_error
 
+    def find_error_new(self, coeff, a, b, order):
+        n = int(5e3*(b-a)+1)#5*(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
+        full_x = np.linspace(self.lower_bound, self.upper_bound, 100, dtype=np.float64)
+        #x = full_x[(a < full_x) & (full_x < b)]
+        x = np.linspace(a, b, n, dtype=np.float64)
+        approx = self.eval_coeff(coeff, x, self.basis, order)
+        actual = self.function(x)
+        max_abs_err = la.norm(approx - actual, np.inf)
+        max_val_full_int = la.norm(self.function(full_x), np.inf)
+        return max_abs_err/max_val_full_int
+
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
     def adapt(self, a, b, index):
         # prevent from refining the interval too greatly
-        if (abs(b-a) < min(self.allowed_error, 1e-10)):
-            raise ValueError('Recursed too far. Try higher order interpolant \
-                              , or lower your precision')
+        # allow only 20 levels of refinement
+        if (index >= 2**(self.max_recur+1)):
+            string_err0 = "Recursed too far. Try a higher order interpolant\n"
+            string_err0+= "or raise the allowed error allowed."
+            #raise ValueError(string_err0)
+            return
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
@@ -163,12 +182,17 @@ class Interpolant(object):
         if temp[0] != 0:
             coeff = temp
         else:
-            raise ValueError("Singular Matrix obtained on \
-                              bounds, {0}, {1}".format(a, b))
+            string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
+            string_err1+= "If using monomials try using an orthogonal polynomial.\n"
+            string_err1+= "Otherwise, try a higher order interpolant or lower the\n"
+            string_err1+= 'allowed error.'
+            #raise ValueError(string_err1)
             return
         # calculate the maximum relative error on the interval
         # using these coefficients
-        this_error = self.find_error(coeff, a, b, self.max_order)
+        this_error = self.find_error_new(coeff, a, b, self.max_order)
+        # print("this_error:{0}, ae: {4}, bool:{1},{2},{3}".format(this_error, \
+        #       this_error>self.allowed_error, a, b, self.allowed_error))
         # append the coefficients and the range they are valid on to this
         # array also the basis function and order of in this range
         self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
@@ -182,20 +206,24 @@ class Interpolant(object):
     # adaptive method finding an interpolant for a function
     # this checks multiple orders to make an interpolant
     def variable_order_adapt(self, a, b, index):
-        # recursed too far
-        if (abs(b-a) < self.allowed_error): return
+        # recursed too far, 15 levels down
+        if (index >= 2**(self.max_recur+1)): 
+            string_err0 = "Recursed too far. Try a higher order interpolant\n"
+            string_err0+= "or raise the allowed error allowed."
+            #raise ValueError(string_err0)
+            return
         min_error = 1e100
-        # check all the interpolant possibillities and orders to
-        # find the best one that runs
+        # check all the interpolant possibillities and
+        # orders to find the best one that runs
         coeff = [0]
         # check orders 0 to max_order
-        for curr_order in range(self.max_order+1):
+        for curr_order in range(int(self.max_order)+1):
             # only the monomial choice can be evaluated in the
             nodes = self.get_nodes(a, b, curr_order)
             curr_coeff = self.interpolate(nodes, self.basis)
             # if you get a singular matrix, break the for loop
             if curr_coeff[0] == 0: break
-            error = self.find_error(curr_coeff, a, b, curr_order)
+            error = self.find_error_new(curr_coeff, a, b, curr_order)
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
@@ -203,7 +231,7 @@ class Interpolant(object):
         if coeff[0] == 0: return
         # turn into max_order interpolant so it can run using
         # same generative code
-        padded = np.zeros((self.max_order+1,))
+        padded = np.zeros((int(self.max_order)+1,))
         padded[:coeff.shape[0]] = coeff
         self.add_to_heap([(a+b)/2., padded, self.basis, [a, b], min_error], index)
         # if there is a discontinuity then b-a will be very small
@@ -216,6 +244,8 @@ class Interpolant(object):
 
     # Method to run the adaptive method initially
     def run_adapt(self, lower_bound, upper_bound, variable_order=False):
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
         if variable_order:
             self.variable_order_adapt(lower_bound, upper_bound, 1)
         else:

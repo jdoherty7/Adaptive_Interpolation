@@ -17,10 +17,6 @@ import adaptive_interpolation.adaptive_interpolation as adapt_i
 # bessel function for testing
 def f(x):
     return spec.jn(0, x)
-    # return x**2 - 10.*x**1 + 25.*x**0
-    # return 0 + 0*x + (.5*(3*x**2 - 1))
-    # it takes 40s to graph n =20 with 5e5 points
-
 
 # a function for testing
 def f1(x0):
@@ -64,16 +60,17 @@ def my_plot(x, actual, approximation, abs_errors, allowed_error, ap):
 
 
 def demo_adapt(with_pyopencl=True):
-    a, b, allowed_error = 0, 20, 1e-12
+    a, b, allowed_error = 0, 10, 5e-14
     print("Creating Interpolant")
-    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f, 40, allowed_error)
+    my_approx = adapt_i.make_chebyshev_interpolant(a, b, f, 20, allowed_error)
     code = 0
     code = adapt_i.generate_code(my_approx)
     print(code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 1e3).astype(np.float64)
+    x = np.linspace(a, b, 1e3, dtype=np.float64)
     if with_pyopencl:
-        est = adapt_i.run_code(code, x, my_approx)
+        pass
+        #est = adapt_i.run_code(code, x, my_approx)
     else:
         est = my_approx.evaluate(x)
     print("Evaluating Function")
@@ -89,9 +86,10 @@ def demo_adapt_variable(with_pyopencl=True):
     code = adapt_i.generate_code(my_approx)
     print(code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 1e2).astype(np.float64)
+    x = np.linspace(a, b, 1e2, dtype=np.float64)
     if with_pyopencl:
-        est = adapt_i.run_code(code, x, my_approx)
+        pass
+        #est = adapt_i.run_code(code, x, my_approx)
     else:
         est = my_approx.evaluate(x)
     print("Evaluating Function")
@@ -102,4 +100,4 @@ def demo_adapt_variable(with_pyopencl=True):
 # run the main program
 if __name__ == "__main__":
     demo_adapt(False)
-    demo_adapt_variable(False)
+    #demo_adapt_variable(False)

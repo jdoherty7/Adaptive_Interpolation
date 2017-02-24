@@ -13,8 +13,8 @@ from __future__ import print_function
 
 import cgen as c
 import numpy as np
-import pyopencl as cl
-import pyopencl.array as cl_array
+#import pyopencl as cl
+#import pyopencl.array as cl_array
 
 
 def gen_mono(ap, domain_size):
@@ -210,7 +210,7 @@ def gen_cheb_vb(ap):
 def gen_leg_vb(ap):
     pass
 
-
+"""
 # string is executable c code
 # x is the co-image of function
 def run_c(x, string):
@@ -264,7 +264,7 @@ def run_c_v(x, approx, string):
             coeff_dev.data, x_dev.data, y_dev.data)
 
     return y_dev.get()
-
+"""
 
 # use to save the generated code for later use
 def write_to_file(file_name, string):
