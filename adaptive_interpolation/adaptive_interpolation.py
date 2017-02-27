@@ -10,47 +10,50 @@ import adaptive_interpolation.generate as generate
 # takes an interval from a to b, a function, an interpolant order, and a
 # maximum allowed error and returns an Approximator class representing
 # a monomial interpolant that fits those parameters
-def make_monomial_interpolant(a, b, func, order, error, variable=False):
+def make_monomial_interpolant(a, b, func, order, error,
+                              variable=False, accurate=True):
     # node type used random and cheb are options, otherwise equispaced is used
     nt = 'chebyshev'
     # chebyshev, legendre, or monomials
     interp_choice = 'monomial'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
-                                 np.float64(error), nt, np.float64(order), \
-                                 interp_choice, variable)
+    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
+                                 np.float64(order), np.float64(error),
+                                 interp_choice, nt, variable, accurate)
     return app.Approximator(adapt_class)
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
 # maximum allowed error and returns an Approximator class representing
 # a chebyshev interpolant that fits those parameters
-def make_chebyshev_interpolant(a, b, func, order, error, variable=False):
+def make_chebyshev_interpolant(a, b, func, order, error,
+                               variable=False, accurate=True):
     # interpolant parameters
     # node type used random and cheb are options, otherwise equispaced is used
     nt = 'chebyshev'
     # chebyshev, legendre, or monomials
     interp_choice = 'chebyshev'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
-                                 np.float64(error), nt, np.float64(order), \
-                                 interp_choice, variable)
+    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
+                                 np.float64(order), np.float64(error),
+                                 interp_choice, nt, variable, accurate)
     return app.Approximator(adapt_class)
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
 # maximum allowed error and returns an Approximator class representing
 # a legendre interpolant that fits those parameters
-def make_legendre_interpolant(a, b, func, order, error, variable=False):
+def make_legendre_interpolant(a, b, func, order, error,
+                              variable=False, accurate=True):
     # interpolant parameters
     # node type used random and cheb are options, otherwise equispaced is used
     nt = 'chebyshev'
     # chebyshev, legendre, or monomials
     interp_choice = 'legendre'
 
-    adapt_class = adapt.adaptive(func, np.float64(a), np.float64(b), \
-                                 np.float64(error), nt, np.float64(order), \
-                                 interp_choice, variable)
+    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
+                                 np.float64(order), np.float64(error),
+                                 interp_choice, nt, variable, accurate)
     return app.Approximator(adapt_class)
 
 
@@ -63,51 +66,52 @@ def generate_code(approx, branching=0, vectorized=1, domain_size=None):
     if (vectorized == 0) and (domain_size is None):
         string_err = "Please enter the number of points"
         string_err+= "that will be evaluated in domain_size."
-        print(string_err)
-        return 0
-    code = 0
-    if approx.basis == 'monomials':
+        raise Exception(string_err)
+    if approx.basis == 'monomial':
         if not branching:
             if vectorized:
                 code = generate.gen_mono_v(approx)
             else:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_mono(approx, domain_size)
         else:
             if vectorized:
-                code = generate.gen_mono_vb(approx)
+                raise Exception("This code generation option currently unavailable.")
+                # code = generate.gen_mono_vb(approx)
             else:
-                code = generate.gen_mono_b(approx, domain_size)
+                raise Exception("This code generation option currently unavailable.")
+                # code = generate.gen_mono_b(approx, domain_size)
 
     elif approx.basis == 'chebyshev':
         if not branching:
             if vectorized:
                 code = generate.gen_cheb_v(approx)
             else:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_cheb(approx, domain_size)
         else:
             if vectorized:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_cheb_vb(approx)
             else:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_cheb_b(approx, domain_size)
 
     elif approx.basis == 'legendre':
         if not branching:
             if vectorized:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_leg_v(approx)
             else:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_leg(approx, domain_size)
         else:
             if vectorized:
-                pass
+                raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_mono_vb(approx)
             else:
-                code = generate.gen_leg_b(approx, domain_size)
+                raise Exception("This code generation option currently unavailable.")
+                # code = generate.gen_leg_b(approx, domain_size)
     approx.code = code
     return code
 
@@ -140,6 +144,7 @@ def run_code(code, x, approx=0, vectorized=True):
         return generate.run_c_v(x, approx, code)
     elif not vectorized:
         return generate.run_c(x, code)
-    print("You must give an appropriate appxoimator class if the \
-           code is not vectorized.")
-    return 0
+    string_err = "You must give an appropriate appxoimator class"
+    string_err+= "if the code is not vectorized."
+    raise Exception(string_err)
+

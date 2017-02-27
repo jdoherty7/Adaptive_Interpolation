@@ -11,14 +11,15 @@ import numpy.linalg as la
 class Interpolant(object):
 
     # defining parameters of an adaptive method
-    def __init__(self, f, error, order, node_choice, interpolant_choice):
+    def __init__(self, f, order, error, interpolant_choice, 
+                 node_choice, guaranteed_accurate=True):
         # function pass, must be vectorized
         self.function = f
         self.lower_bound = 0
         self.upper_bound = 0
         # max number of recursion levels allowed for adaption
         # 34 reaches a spacing of 10**-15
-        self.max_recur = 10
+        self.max_recur = 11
         # max order allwed to create interpolation
         self.max_order = order
         # string specifying node choice
@@ -27,6 +28,7 @@ class Interpolant(object):
         self.basis = interpolant_choice
         self.heap = [0, 0]
         self.allowed_error = error
+        self.guaranteed_accurate = guaranteed_accurate
 
     def make_full_tree(self):
         for i in range(len(self.heap)):
@@ -153,10 +155,10 @@ class Interpolant(object):
         rel_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
         return rel_error
 
+    # finds error using the max val as the max on the entire interval, not the current
     def find_error_new(self, coeff, a, b, order):
         n = int(5e3*(b-a)+1)#5*(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
         full_x = np.linspace(self.lower_bound, self.upper_bound, 100, dtype=np.float64)
-        #x = full_x[(a < full_x) & (full_x < b)]
         x = np.linspace(a, b, n, dtype=np.float64)
         approx = self.eval_coeff(coeff, x, self.basis, order)
         actual = self.function(x)
@@ -171,9 +173,11 @@ class Interpolant(object):
         # allow only 20 levels of refinement
         if (index >= 2**(self.max_recur+1)):
             string_err0 = "Recursed too far. Try a higher order interpolant\n"
-            string_err0+= "or raise the allowed error allowed."
-            #raise ValueError(string_err0)
-            return
+            string_err0+= "or raise the allowed error."
+            if self.guaranteed_accurate:
+                raise ValueError(string_err0)
+            else:
+                return
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
@@ -186,13 +190,10 @@ class Interpolant(object):
             string_err1+= "If using monomials try using an orthogonal polynomial.\n"
             string_err1+= "Otherwise, try a higher order interpolant or lower the\n"
             string_err1+= 'allowed error.'
-            #raise ValueError(string_err1)
-            return
+            raise ValueError(string_err1)
         # calculate the maximum relative error on the interval
         # using these coefficients
         this_error = self.find_error_new(coeff, a, b, self.max_order)
-        # print("this_error:{0}, ae: {4}, bool:{1},{2},{3}".format(this_error, \
-        #       this_error>self.allowed_error, a, b, self.allowed_error))
         # append the coefficients and the range they are valid on to this
         # array also the basis function and order of in this range
         self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
@@ -210,8 +211,10 @@ class Interpolant(object):
         if (index >= 2**(self.max_recur+1)): 
             string_err0 = "Recursed too far. Try a higher order interpolant\n"
             string_err0+= "or raise the allowed error allowed."
-            #raise ValueError(string_err0)
-            return
+            if self.guaranteed_accurate:
+                raise ValueError(string_err0)
+            else:
+                return
         min_error = 1e100
         # check all the interpolant possibillities and
         # orders to find the best one that runs
@@ -244,6 +247,8 @@ class Interpolant(object):
 
     # Method to run the adaptive method initially
     def run_adapt(self, lower_bound, upper_bound, variable_order=False):
+        if upper_bound <= lower_bound:
+            raise Exception("Upper bound must be greater than lower bound.")
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
         if variable_order:
@@ -255,10 +260,12 @@ class Interpolant(object):
 
 
 # function that creates and then runs an adaptive method.
-def adaptive(function, lower_bound, upper_bound, error, node_choice,
-             order, interpolant_choice, variable=False):
-    my_adapt = Interpolant(function, np.float64(error), np.float64(order), \
-		           node_choice, interpolant_choice)
-    my_adapt.run_adapt(np.float64(lower_bound), \
+def adaptive(lower_bound, upper_bound, function, order, error,
+             interpolant_choice, node_choice,
+             variable=False, guaranteed_accurate=True):
+    my_adapt = Interpolant(function, np.float64(order),
+                           np.float64(error), interpolant_choice,
+                           node_choice, guaranteed_accurate)
+    my_adapt.run_adapt(np.float64(lower_bound),
 		       np.float64(upper_bound), variable)
     return my_adapt

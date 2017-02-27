@@ -44,8 +44,7 @@ class Approximator(object):
         rel = []
         for r in self.used_coeff:
             try:
-                ranges.append(r[3][0])
-                ranges.append(r[3][1])
+                ranges.append([r[3][0], r[3][1]])
                 rel.append(r[4])
             except:
                 pass
