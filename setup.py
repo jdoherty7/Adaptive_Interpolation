@@ -14,7 +14,7 @@ config = {
     'url' : 'https://www.github.com/jdoherty7/Adaptive_Interpolation',
     'install_requires': ['nose', 'numpy', 'matplotlib',
     'pyopencl', 'scipy', 'cgen'],
-    'packages': ['adaptive_interpolation', 'tests'],
+    'packages': ['adaptive_interpolation'],
     'name': 'adaptive_interpolation'
 }
 
