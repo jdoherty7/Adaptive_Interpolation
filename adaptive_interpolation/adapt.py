@@ -82,16 +82,21 @@ class Interpolant(object):
                 C.append(np.float64(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
+    def transform(self, x):
+        scale = x/(self.upper_bound - self.lower_bound)
+        return 2*scale - self.lower_bound - 1
+
     # evaluate the given basis function for whatever order given
     # if basis other than those specified is given, monomials is used
     # x can be array but this was built in the class for it to be a number
     def basis_function(self, x, order, basis):
         if (basis == 'legendre'):
-            return self.legendre(order, x)
+            return self.legendre(order, self.transform(x))
         elif (basis == 'chebyshev'):
-            return self.chebyshev(order, x)
+            return self.chebyshev(order, self.transform(x))
         else:
-            return np.array([x**i for i in range(int(order)+1)], dtype=np.float64)
+            z = self.transform(x)
+            return np.array([z**i for i in range(int(order)+1)], dtype=np.float64)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array

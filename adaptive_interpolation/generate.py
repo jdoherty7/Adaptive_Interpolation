@@ -10,6 +10,8 @@ as C code into a file to save if the user wishes to use it later
 
 from __future__ import absolute_import
 from __future__ import print_function
+from __future__ import division
+
 
 import cgen as c
 import numpy as np
@@ -253,7 +255,7 @@ def run_c_v(x, approx, string):
         max_order = len(coeff[1])
         coeff_n = np.ones(len(coeff)*max_order).astype(np.float64)
         for i in range(len(coeff)*max_order):
-            coeff_n[i] = coeff[i/max_order][i % max_order]
+            coeff_n[i] = coeff[i//max_order][i % max_order]
 
         x_dev = cl_array.to_device(queue, x)
         table_dev = cl_array.to_device(queue, np.array(table).astype(np.float64))

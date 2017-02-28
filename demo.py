@@ -2,6 +2,7 @@
 Demonstration of capabilities of the module
 
 """
+from __future__ import absolute_import
 
 import time
 import numpy as np
@@ -128,7 +129,7 @@ def demo_adapt_variable(function, order, allowed_error, basis,
     code = adapt_i.generate_code(my_approx)
     print(code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 1e4, dtype=np.float64)
+    x = np.linspace(a, b, 5e4, dtype=np.float64)
     if with_pyopencl: 
         est = adapt_i.run_code(code, x, my_approx)
     else: 
@@ -144,8 +145,8 @@ if __name__ == "__main__":
     # method interpolates a bessel function
     demo_adapt(f, 10, 1e-13, 'chebyshev')
     # method interpolating a exact function
-    my_f = lambda x: np.sin(1./x)
-    demo_adapt(my_f, 10, 1e-5, 'chebyshev', a=.01, b=1)
+    my_f = lambda x: np.sin(np.float64(1.)/x)
+    demo_adapt(my_f, 20, 1e-3, 'chebyshev', a=.03, b=1)
     # variable order interpolation method
-    demo_adapt_variable(f1, 5, 1e-5, 'monomial')
+    demo_adapt_variable(f1, 10, 1e-5, 'monomial')
 

@@ -1,6 +1,8 @@
 """
 Main methods used in the adaptive_interpolation library
 """
+from __future__ import absolute_import
+
 import numpy as np
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
