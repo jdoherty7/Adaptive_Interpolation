@@ -1,5 +1,5 @@
 from nose.tools import *
-from ADAPT.generate import generate
+import adaptive_interpolation.generate as generate
 
 def test_generation():
     pass

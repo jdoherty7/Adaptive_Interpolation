@@ -13,13 +13,17 @@ class Interpolant(object):
     # defining parameters of an adaptive method
     def __init__(self, f, order, error, interpolant_choice, 
                  node_choice, guaranteed_accurate=True):
+        if error <= 1e-16:
+            string_err = "This package currently uses doubles thus an error"
+            string_err+= "tolerance of less than 1e-16 is not possible."
+            raise ValueError(string_err)
         # function pass, must be vectorized
         self.function = f
         self.lower_bound = 0
         self.upper_bound = 0
         # max number of recursion levels allowed for adaption
         # 34 reaches a spacing of 10**-15
-        self.max_recur = 11
+        self.max_recur = 25
         # max order allwed to create interpolation
         self.max_order = order
         # string specifying node choice

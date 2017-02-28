@@ -1,5 +1,5 @@
 from nose.tools import *
-from ADAPT.adapt import Interpolant
+import adaptive_interpolation.adaptive_interpolation as adapt_i
 
 def mono7(x):
     return sum([x**i for i in range(8)])
