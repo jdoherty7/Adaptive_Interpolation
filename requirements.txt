@@ -2,4 +2,3 @@ nose
 numpy
 scipy
 matplotlib
-pyopencl
