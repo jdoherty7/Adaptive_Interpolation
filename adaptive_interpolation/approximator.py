@@ -8,6 +8,8 @@ of simpleAdapt.py
 Will also easily implement different node choices,
 interpolant choices, etc.
 """
+from __future__ import division
+
 import numpy as np
 
 
@@ -19,6 +21,8 @@ class Approximator(object):
         # raw array data from adaptive interpolation method
         self.adapt = adapt
         self.heap = adapt.heap
+        self.upper_bound = adapt.upper_bound
+        self.lower_bound = adapt.lower_bound
         self.basis = adapt.basis
         self.code = 0
         self.max_order = adapt.max_order
@@ -27,6 +31,14 @@ class Approximator(object):
         self.used_coeff = self.heap[-2**(self.num_levels-1):]
         self.ranges, self.rel_errors = self.make_ranges_err()
         self.used_midpoints = self.midpoints[-2**(self.num_levels-1):]
+        self.coeff_1d = self.make_vector_coeff()
+
+    def make_vector_coeff(self):
+        length = int(len(self.coeff)*self.max_order)
+        self.coeff_1d = np.ones(length, dtype=np.float64)
+        max_or = int(self.max_order)
+        for i in range(length):
+            self.coeff_1d[i] = self.coeff[i//max_or][i%max_or]
 
     def make_mid_coeff(self):
         midpoints = [0]

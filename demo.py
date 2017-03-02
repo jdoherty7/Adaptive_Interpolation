@@ -96,7 +96,7 @@ def demo_adapt(function, order, allowed_error, basis,
     print("Evaluating Interpolant")
     x = np.linspace(a, b, 1e4, dtype=np.float64)
     if with_pyopencl: 
-        est = adapt_i.run_code(code, x, my_approx)
+        est = adapt_i.run_code(x, my_approx)
     else: 
         est = my_approx.evaluate(x)
     print("Evaluating Function")
@@ -131,7 +131,7 @@ def demo_adapt_variable(function, order, allowed_error, basis,
     print("Evaluating Interpolant")
     x = np.linspace(a, b, 5e4, dtype=np.float64)
     if with_pyopencl: 
-        est = adapt_i.run_code(code, x, my_approx)
+        est = adapt_i.run_code(x, my_approx)
     else: 
         est = my_approx.evaluate(x)
     print("Evaluating Function")
@@ -142,11 +142,19 @@ def demo_adapt_variable(function, order, allowed_error, basis,
 
 # run the main program
 if __name__ == "__main__":
+    print("In this demo three functions will be evaluated and")
+    print("plotted, demonstrating some capabilities of this package.")
+    print("This includes a special function, a highly oscillatory")
+    print("function and a discontinuous function.")
+    print("The code generated to evaluate each function will also be displayed.")
     # method interpolates a bessel function
+    print("\n0th order Bessel Function")
     demo_adapt(f, 10, 1e-13, 'chebyshev')
     # method interpolating a exact function
+    print("\nsin(1/x)")
     my_f = lambda x: np.sin(np.float64(1.)/x)
     demo_adapt(my_f, 20, 1e-3, 'chebyshev', a=.03, b=1)
     # variable order interpolation method
+    print("\nA piecewise function")
     demo_adapt_variable(f1, 10, 1e-5, 'monomial')
 

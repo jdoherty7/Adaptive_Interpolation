@@ -45,6 +45,10 @@ def gen_mono_b(ap, domain_size):
         then = []
         statement = c.Statement('y[n] = ' + repr(ap.coeff[i][order]))
         then.append(statement)
+        scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+        shift = repr(ap.lower_bound + 1)
+        statement = c.Statement('{0}*x[n] - {1}'.format(scale, shift))
+        then.append(statement)
         for j in range(order)[::-1]:
             # using horner's method, this requires the for loop to be reversed
             statement = c.Statement('y[n] = x[n]*y[n] + '+repr(ap.coeff[i][j]))
@@ -89,6 +93,10 @@ def gen_leg_b(ap, domain_size):
             if j != order:
                 rvalue += ' + '
         # add legendre polynomial evaluation to code
+        scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+        shift = repr(ap.lower_bound + 1)
+        statement = c.Statement('{0}*x[n] - {1}'.format(scale, shift))
+        then.append(statement)
         then.append(c.Statement('y[n] = ' + rvalue))
         condition = '(' + repr(ap.ranges[i][0]) + ' <= x[n])'
         condition += ' && (x[n] <= ' + repr(ap.ranges[i][1]) + ')'
@@ -115,6 +123,9 @@ def gen_mono_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{ \n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "} \n"
+    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+    shift = repr(ap.lower_bound + 1)
+    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
     string += "y[n] = "
     # the coefficients are transformed from a matrix to a vector.
     # the formula to call the correct entry is given as the indices
@@ -140,6 +151,9 @@ def gen_cheb_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "} \n"
+    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+    shift = repr(ap.lower_bound + 1)
+    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
     string += "T0 = 1.0;\n"
     if order > 0:
         string += "T1 = x[n];\n"
@@ -169,6 +183,9 @@ def gen_leg_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
     string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "}\n"
+    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+    shift = repr(ap.lower_bound + 1)
+    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
     string += "L0 = 1.0;\n"
     if order > 0:
         string += "L1 = x[n];\n"
@@ -196,6 +213,9 @@ def gen_mono_vb(ap):
     for i in range(len(ap.ranges)):
         string += "if ((" + repr(ap.ranges[i][-1][0]) + " <= x[n])"
         string += " && (x[n] <= " + repr(ap.ranges[i][-1][1]) + ")) {\n"
+        scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+        shift = repr(ap.lower_bound + 1)
+        string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
         string += "\ty[n] = "
         sub_string = repr(ap.ranges[i][1][-1])
         for j in range(len(ap.ranges)-1)[::-1]:
@@ -219,7 +239,7 @@ def gen_leg_vb(ap):
 
 # string is executable c code
 # x is the co-image of function
-def run_c(x, string):
+def run_c(x, approx):
     if with_pyopencl:
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
@@ -230,7 +250,7 @@ def run_c(x, string):
         # build the code to run from given string
         declaration = "__kernel void sum(__global double *x, "
         declaration += "__global double *y) "
-        code = declaration + string
+        code = declaration + approx.code
 
         prg = cl.Program(ctx, code).build()
 
@@ -243,30 +263,25 @@ def run_c(x, string):
 
 # string is executable c code
 # x is the co-image of function
-def run_c_v(x, approx, string):
+def run_c_v(x, approx):
     if with_pyopencl:
-        coeff = approx.coeff
+        coeff = approx.coeff_1d
         table = approx.midpoints
+        max_order = approx.max_order
 
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
 
-        # turn coeff into 1 dimensional numpy array
-        max_order = len(coeff[1])
-        coeff_n = np.ones(len(coeff)*max_order).astype(np.float64)
-        for i in range(len(coeff)*max_order):
-            coeff_n[i] = coeff[i//max_order][i % max_order]
-
         x_dev = cl_array.to_device(queue, x)
-        table_dev = cl_array.to_device(queue, np.array(table).astype(np.float64))
-        coeff_dev = cl_array.to_device(queue, coeff_n)
+        table_dev = cl_array.to_device(queue, np.array(table, dtype=np.float64))
+        coeff_dev = cl_array.to_device(queue, coeff)
         y_dev = cl_array.empty_like(x_dev)
 
         # build the code to run from given string
         declaration = "__kernel void sum(__global double *mid, "
         declaration += "__global double *coeff, __global double *x, "
         declaration += "__global double *y) "
-        code = declaration + '{' + string + '}'
+        code = declaration + '{' + approx.code + '}'
 
         prg = cl.Program(ctx, code).build()
         # second parameter determines how many 'code instances' to make, (1, ) is 1

@@ -141,12 +141,14 @@ def get_saved_code(file_name):
 # that is a type float64 and is in the interval specified by the user
 # upon the creation of the interpolant. if the code is not vectorized
 # then the approximator class must also be given to the function
-def run_code(code, x, approx=0, vectorized=True):
-    if vectorized and approx != 0:
-        return generate.run_c_v(x, approx, code)
+def run_code(x, approx, vectorized=True):
+    if approx.code == 0:
+        string_err = "Approximator class does not have any associated "
+        string_err+= "code. Run a generate method to add code to the class."
+        raise Exception(string_err)
+    if vectorized:
+        return generate.run_c_v(x, approx)
     elif not vectorized:
-        return generate.run_c(x, code)
-    string_err = "You must give an appropriate appxoimator class"
-    string_err+= "if the code is not vectorized."
-    raise Exception(string_err)
+        return generate.run_c(x, approx)
+    raise Exception("vectorized must be set to True or False.")
 
