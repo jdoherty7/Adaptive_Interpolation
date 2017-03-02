@@ -273,7 +273,7 @@ def run_c_v(x, approx):
         queue = cl.CommandQueue(ctx)
 
         x_dev = cl_array.to_device(queue, x)
-        table_dev = cl_array.to_device(queue, np.array(table, dtype=np.float64))
+        table_dev = cl_array.to_device(queue, table)
         coeff_dev = cl_array.to_device(queue, coeff)
         y_dev = cl_array.empty_like(x_dev)
 

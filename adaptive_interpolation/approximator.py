@@ -49,6 +49,7 @@ class Approximator(object):
         for i in range(1, len(self.heap)):
             midpoints.append(self.heap[i][0])
             coeff.append(self.heap[i][1])
+        midpoints = np.array(midpoints, dtype=np.float64)
         return midpoints, coeff
 
     def make_ranges_err(self):
