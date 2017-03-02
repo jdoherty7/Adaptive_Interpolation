@@ -34,11 +34,12 @@ class Approximator(object):
         self.coeff_1d = self.make_vector_coeff()
 
     def make_vector_coeff(self):
-        length = int(len(self.coeff)*self.max_order)
-        self.coeff_1d = np.ones(length, dtype=np.float64)
-        max_or = int(self.max_order)
+        length = int(len(self.coeff)*(self.max_order + 1))
+        coeff_1d = np.ones(length, dtype=np.float64)
+        max_or = int(self.max_order+1)
         for i in range(length):
-            self.coeff_1d[i] = self.coeff[i//max_or][i%max_or]
+            coeff_1d[i] = self.coeff[i//max_or][i%max_or]
+        return coeff_1d
 
     def make_mid_coeff(self):
         midpoints = [0]

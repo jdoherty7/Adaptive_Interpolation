@@ -142,7 +142,7 @@ def demo_adapt_variable(function, order, allowed_error, basis,
 
 # run the main program
 if __name__ == "__main__":
-    print("In this demo three functions will be evaluated and")
+    print("\nIn this demo three functions will be evaluated and")
     print("plotted, demonstrating some capabilities of this package.")
     print("This includes a special function, a highly oscillatory")
     print("function and a discontinuous function.")

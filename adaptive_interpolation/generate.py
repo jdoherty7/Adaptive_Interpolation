@@ -269,6 +269,7 @@ def run_c_v(x, approx):
         table = approx.midpoints
         max_order = approx.max_order
 
+
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
 
