@@ -62,8 +62,34 @@ def gen_mono_b(ap, domain_size):
     return str(c.Block([code]))
 
 
+# Branching, non vectorized chebyshev code generation
 def gen_cheb_b(ap, domain_size):
-    pass
+    string += "{\ndouble T0, T1, Tn, s;\n"
+    string += "for(int n=0; n<{0}; i++)".format(int(domain_size))
+    string += "{\n"
+    for i in range(len(ap.ranges)):
+        string += "\tif ((" + repr(ap.ranges[i][-1][0]) + " <= x[n])"
+        string += " && (x[n] <= " + repr(ap.ranges[i][-1][1]) + ")) {\n"
+        scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
+        shift = repr(ap.lower_bound + 1)
+        string += "\t\tx[n] = {0}*x[n] - {1};\n".format(scale, shift)
+        string += "\t\tT0 = 1.0;\n"
+        if order > 0:
+            string += "\t\tT1 = x[n];\n"
+        # initialize the sum
+        string += "\t\ts = " + repr(ap.coeff[i][j]) + "*T0;\n"
+        if order > 0:
+            string += "\t\ts = s + " + repr(ap.coeff[i][j]) + "*T1;\n"
+        if order > 1:
+            for j in range(2, order+1):
+                string += "\t\tTn = 2*x[n]*T1 - T0;\n"
+                string += "\t\ts = s + " + repr(ap.coeff[i][j]) + "*Tn;\n"
+                string += "\t\tT0 = T1;\n"
+                string += "\t\tT1 = Tn;\n"
+        string += "\t\ty[n] = s;\n"
+        string += "\t}"
+    string += "}}"
+    return string
 
 
 # generate C code that evaluates legendre polynomials
