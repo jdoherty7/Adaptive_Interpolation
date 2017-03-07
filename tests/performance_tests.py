@@ -4,6 +4,7 @@ the evaluation of said interpolant
 
 This is now faster than default bessel approximation!
 """
+from future import __absoulte_import__
 from nose.tools import *
 
 import time
