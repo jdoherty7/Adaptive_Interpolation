@@ -25,6 +25,11 @@ except:
 def f(x):
     return spec.jn(0, x)
 
+def g(x):
+    return (1. - np.exp(-(1.1)*(x-1)))**2
+
+def morse_potential(x):
+    return g(x)/g(.2)
 
 # a function for testing
 def f1(x0):
@@ -129,7 +134,7 @@ def demo_adapt_variable(function, order, allowed_error, basis,
     code = adapt_i.generate_code(my_approx)
     print(code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 5e4, dtype=np.float64)
+    x = np.linspace(a, b, 1e4, dtype=np.float64)
     if with_pyopencl: 
         est = adapt_i.run_code(x, my_approx)
     else: 
@@ -140,8 +145,7 @@ def demo_adapt_variable(function, order, allowed_error, basis,
     my_plot(x, true, est, abs(true-est), allowed_error, my_approx)
 
 
-# run the main program
-if __name__ == "__main__":
+def main_demo():
     print("\nIn this demo three functions will be evaluated and")
     print("plotted, demonstrating some capabilities of this package.")
     print("This includes a special function, a highly oscillatory")
@@ -157,4 +161,10 @@ if __name__ == "__main__":
     # variable order interpolation method
     print("\nA piecewise function")
     demo_adapt_variable(f1, 10, 1e-5, 'monomial')
+
+
+# run the main program
+if __name__ == "__main__":
+    main_demo()
+    #demo_adapt(morse_potential, 20, 1e-13, 'chebyshev')
 
