@@ -11,11 +11,15 @@ run in the library using a method that uses pyopencl to run the code in parallel
 To see a demonstration of this code first clone this git repository to
 your machine using:
 
-`git clone https://www.github.com/jdoherty7/Adaptive_Interpolation`
+```
+git clone https://www.github.com/jdoherty7/Adaptive_Interpolation
+```
 
 Then run the demonstration by entering the cloned directory and running:
 
-`python demo.py`
+```
+python demo.py
+```
 
 The code should begin interpolating three functions. One is a bessel function,
 one is a wavy sin function, and another is a piecewise function. These are 
@@ -27,5 +31,3 @@ actual values. The allowed relative error is shown as a red line.
 NOTE: When prompted for a processor by pyopencl please press ENTER,
 without typting anything to continue.
 
-
-Try changing things in the demo. Different
