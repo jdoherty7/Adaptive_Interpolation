@@ -46,8 +46,8 @@ def gen_mono_b(ap, domain_size):
         statement = c.Statement('y[n] = ' + repr(ap.coeff[i][order]))
         then.append(statement)
         scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-        shift = repr(ap.lower_bound + 1)
-        statement = c.Statement('{0}*x[n] - {1}'.format(scale, shift))
+        shift = repr(ap.lower_bound)
+        statement = c.Statement('x[n] = {0}*(x[n] - {1})-1.0'.format(scale, shift))
         then.append(statement)
         for j in range(order)[::-1]:
             # using horner's method, this requires the for loop to be reversed
@@ -71,8 +71,8 @@ def gen_cheb_b(ap, domain_size):
         string += "\tif ((" + repr(ap.ranges[i][-1][0]) + " <= x[n])"
         string += " && (x[n] <= " + repr(ap.ranges[i][-1][1]) + ")) {\n"
         scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-        shift = repr(ap.lower_bound + 1)
-        string += "\t\tx[n] = {0}*x[n] - {1};\n".format(scale, shift)
+        shift = repr(ap.lower_bound)
+        statement = c.Statement('x[n] = {0}*(x[n] - {1})-1.0'.format(scale, shift))
         string += "\t\tT0 = 1.0;\n"
         if order > 0:
             string += "\t\tT1 = x[n];\n"
@@ -120,8 +120,8 @@ def gen_leg_b(ap, domain_size):
                 rvalue += ' + '
         # add legendre polynomial evaluation to code
         scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-        shift = repr(ap.lower_bound + 1)
-        statement = c.Statement('{0}*x[n] - {1}'.format(scale, shift))
+        shift = repr(ap.lower_bound)
+        statement = c.Statement('x[n] = {0}*(x[n] - {1})-1.0'.format(scale, shift))
         then.append(statement)
         then.append(c.Statement('y[n] = ' + rvalue))
         condition = '(' + repr(ap.ranges[i][0]) + ' <= x[n])'
@@ -149,9 +149,6 @@ def gen_mono_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{ \n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "} \n"
-    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-    shift = repr(ap.lower_bound + 1)
-    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
     string += "y[n] = "
     # the coefficients are transformed from a matrix to a vector.
     # the formula to call the correct entry is given as the indices
@@ -177,9 +174,9 @@ def gen_cheb_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "} \n"
-    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-    shift = repr(ap.lower_bound + 1)
-    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
+    # rescale variables
+    string += "x[n] = (2/(ranges1[index] - ranges0[index]))*"
+    string += "(x[n] - ranges0[index]) - 1.0;\n"
     string += "T0 = 1.0;\n"
     if order > 0:
         string += "T1 = x[n];\n"
@@ -209,9 +206,8 @@ def gen_leg_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(ap.num_levels)
     string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "}\n"
-    scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-    shift = repr(ap.lower_bound + 1)
-    string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
+    string += "x[n] = (2/(ranges1[index] - ranges0[index]))*"
+    string += "(x[n] - ranges0[index]) - 1.0;\n"
     string += "L0 = 1.0;\n"
     if order > 0:
         string += "L1 = x[n];\n"
@@ -221,7 +217,7 @@ def gen_leg_v(ap):
         string += "s = s + coeff[index*{0}+{1}]*L1;\n".format(order+1, 1)
     if order > 1:
         string += "for (int j = 2; j <=" + repr(order) + "; j++) {\n"
-        string += "\tLn = ((2.*j-1.)*x[n]*L1 - (j-1.)*L0)/"+repr(order)+";\n"
+        string += "\tLn = ((2.*j-1.)*x[n]*L1 + (j-1.)*L0)/"+repr(np.float64(order))+";\n"
         string += "\ts = s + coeff[index*{0} + j]*Ln;\n".format(order+1)
         string += "\tL0 = L1;\n"
         string += "\tL1 = Ln;\n"
@@ -235,13 +231,10 @@ def gen_leg_v(ap):
 # simple method for evaluating a monomial interpolant with openCl
 # not currently vectorized
 def gen_mono_vb(ap):
-    string = "{ int n = get_global_id(0);\n"
+    string = "int n = get_global_id(0);\n"
     for i in range(len(ap.ranges)):
         string += "if ((" + repr(ap.ranges[i][-1][0]) + " <= x[n])"
         string += " && (x[n] <= " + repr(ap.ranges[i][-1][1]) + ")) {\n"
-        scale = repr(np.float64(2)/(ap.upper_bound - ap.lower_bound))
-        shift = repr(ap.lower_bound + 1)
-        string += "x[n] = {0}*x[n] - {1};\n".format(scale, shift)
         string += "\ty[n] = "
         sub_string = repr(ap.ranges[i][1][-1])
         for j in range(len(ap.ranges)-1)[::-1]:
@@ -251,7 +244,6 @@ def gen_mono_vb(ap):
         string += sub_string
         string += ";\n"
         string += "}\n"
-    string += "}\n"
     return string
 
 
@@ -263,38 +255,11 @@ def gen_leg_vb(ap):
     pass
 
 
-# string is executable c code
-# x is the co-image of function
-def run_c(x, approx):
-    if with_pyopencl:
-        ctx = cl.create_some_context()
-        queue = cl.CommandQueue(ctx)
-
-        x_dev = cl_array.to_device(queue, x)
-        y_dev = cl_array.empty_like(x_dev)
-
-        # build the code to run from given string
-        declaration = "__kernel void sum(__global double *x, "
-        declaration += "__global double *y) "
-        code = declaration + approx.code
-
-        prg = cl.Program(ctx, code).build()
-
-        # second parameter determines how many 'code instances' to make, (1, ) is 1
-        prg.sum(queue, x_dev.shape, None, x_dev.data, y_dev.data)
-        return y_dev.get()
-    else:
-        raise ValueError("Function requires pyopencl installation.")
-
-
-# string is executable c code
-# x is the co-image of function
-def run_c_v(x, approx):
+# runs the code for a normal monomial basis with no transformations.
+def run_mono_vec(x, approx):
     if with_pyopencl:
         coeff = approx.coeff_1d
         table = approx.midpoints
-        max_order = approx.max_order
-
 
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
@@ -314,22 +279,57 @@ def run_c_v(x, approx):
         # second parameter determines how many 'code instances' to make, (1, ) is 1
         prg.sum(queue, x_dev.shape, None, table_dev.data,
                 coeff_dev.data, x_dev.data, y_dev.data)
+        return y_dev.get()
+    else:
+        raise ValueError("Function requires pyopencl installation.")
 
+
+# string is executable c code
+# x is the co-image of function
+def run_ortho_vec(x, approx):
+    if with_pyopencl:
+        coeff = approx.coeff_1d
+        table = approx.midpoints
+        ranges0 = approx.ranges0
+        ranges1 = approx.ranges1
+
+        ctx = cl.create_some_context()
+        queue = cl.CommandQueue(ctx)
+
+        x_dev = cl_array.to_device(queue, x)
+        table_dev = cl_array.to_device(queue, table)
+        coeff_dev = cl_array.to_device(queue, coeff)
+        ranges0_dev = cl_array.to_device(queue, ranges0)
+        ranges1_dev = cl_array.to_device(queue, ranges1)
+        y_dev = cl_array.empty_like(x_dev)
+
+        # build the code to run from given string
+        declaration = "__kernel void sum(__global double *mid, "
+        declaration += "__global double *coeff, __global double *ranges0, "
+        declaration += "__global double *ranges1, __global double *x, "
+        declaration += "__global double *y) "
+        code = declaration + '{' + approx.code + '}'
+
+        prg = cl.Program(ctx, code).build()
+        # second parameter determines how many 'code instances' to make, (1, ) is 1
+        prg.sum(queue, x_dev.shape, None, table_dev.data,
+                coeff_dev.data, ranges0_dev.data, 
+                ranges1_dev.data, x_dev.data, y_dev.data)
         return y_dev.get()
     else:
         raise ValueError("Function requires pyopencl installation.")
 
 
 # use to save the generated code for later use
-def write_to_file(file_name, string):
-    my_file = open("generated_code/"+file_name+".txt", "w")
+def write_to_file(file_path, string):
+    my_file = open(file_path + ".txt", "w")
     my_file.write(string)
     my_file.close()
 
 
 # run the C method from the given file using the given domain
-def Run_from_file(x, file_name):
-    my_file = open("generated_code/"+file_name+".txt", "r")
+def Run_from_file(x, file_path):
+    my_file = open(file_path + ".txt", "r")
     # code is just on first line of file, so get this then run it
     code = my_file.readline()
     out = run_c(x, code)

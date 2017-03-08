@@ -9,6 +9,7 @@ Will also easily implement different node choices,
 interpolant choices, etc.
 """
 from __future__ import division
+from __future__ import absolute_import
 
 import numpy as np
 
@@ -17,17 +18,18 @@ import numpy as np
 # coefficients on different ranges
 class Approximator(object):
 
-    def __init__(self, adapt):
+    def __init__(self, my_adapt):
         # raw array data from adaptive interpolation method
-        self.adapt = adapt
-        self.heap = adapt.heap
-        self.upper_bound = adapt.upper_bound
-        self.lower_bound = adapt.lower_bound
-        self.basis = adapt.basis
+        self.basis_function = my_adapt.basis_function
+        self.heap = my_adapt.heap
+        self.upper_bound = my_adapt.upper_bound
+        self.lower_bound = my_adapt.lower_bound
+        self.basis = my_adapt.basis
         self.code = 0
-        self.max_order = adapt.max_order
+        self.max_order = my_adapt.max_order
         self.num_levels = int(np.log(len(self.heap))/np.log(2))
-        self.midpoints, self.coeff = self.make_mid_coeff()
+        self.all_ranges, self.midpoints, self.coeff = self.make_mid_coeff()
+        self.ranges0, self.ranges1 = self.make_run_ranges()
         self.used_coeff = self.heap[-2**(self.num_levels-1):]
         self.ranges, self.rel_errors = self.make_ranges_err()
         self.used_midpoints = self.midpoints[-2**(self.num_levels-1):]
@@ -46,12 +48,15 @@ class Approximator(object):
         # initialize first element as coeff vector of 0 values
         # assume that all coeff vectors are numpy arrays in heap
         coeff = [0*self.heap[1][1]]
+        all_range = [[0,0]]
         # assume that the heap is properly allocated
         for i in range(1, len(self.heap)):
             midpoints.append(self.heap[i][0])
             coeff.append(self.heap[i][1])
+            all_range.append(np.array(self.heap[i][3], dtype=np.float64))
         midpoints = np.array(midpoints, dtype=np.float64)
-        return midpoints, coeff
+        all_range = np.array(all_range, dtype=np.float64)
+        return all_range, midpoints, coeff
 
     def make_ranges_err(self):
         ranges = []
@@ -63,6 +68,16 @@ class Approximator(object):
             except:
                 pass
         return ranges, rel
+
+    # make range arrays to pass to run_c_v
+    def make_run_ranges(self):
+        lower, upper = [], []
+        for r in self.all_ranges:
+            lower.append(r[0])
+            upper.append(r[1])
+        lower = np.array(lower, dtype=np.float64)
+        upper = np.array(upper, dtype=np.float64)
+        return lower, upper
 
     def get_index(self, x_val):
         # start at index 1
@@ -96,8 +111,10 @@ class Approximator(object):
             coeff = self.heap[index][1]
             basis = self.heap[index][2]
             order = np.float64(len(coeff) - 1)
+            a = self.heap[index][3][0]
+            b = self.heap[index][3][1]
             # evaluate the given basis function
-            xs = self.adapt.basis_function(x0, order, basis)
+            xs = self.basis_function(x0, order, basis, a, b)
             # multiply the calculated basis by their coefficients
             # that are givent for the calculated array
             val = np.dot(np.array(coeff), xs)

@@ -102,8 +102,8 @@ def generate_code(approx, branching=0, vectorized=1, domain_size=None):
     elif approx.basis == 'legendre':
         if not branching:
             if vectorized:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_leg_v(approx)
+                #raise Exception("This code generation option currently unavailable.")
+                code = generate.gen_leg_v(approx)
             else:
                 raise Exception("This code generation option currently unavailable.")
                 # code = generate.gen_leg(approx, domain_size)
@@ -146,9 +146,10 @@ def run_code(x, approx, vectorized=True):
         string_err = "Approximator class does not have any associated "
         string_err+= "code. Run a generate method to add code to the class."
         raise Exception(string_err)
-    if vectorized:
-        return generate.run_c_v(x, approx)
-    elif not vectorized:
-        return generate.run_c(x, approx)
-    raise Exception("vectorized must be set to True or False.")
+    if vectorized and (approx.basis == 'chebyshev' or approx.basis == 'legendre'):
+        return generate.run_ortho_vec(x, approx)
+    elif vectorized and approx.basis == 'monomial':
+        return generate.run_mono_vec(x, approx)
+    raise Exception("Non vectorized is not currently supported. \
+                     Please choose a vectorized method.")
 

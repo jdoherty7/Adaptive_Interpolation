@@ -17,6 +17,13 @@ class Interpolant(object):
             string_err = "This package currently uses doubles thus an error"
             string_err+= "tolerance of less than 1e-16 is not possible."
             raise ValueError(string_err)
+        my_bool = interpolant_choice != 'chebyshev'
+        my_bool = my_bool and interpolant_choice != 'legendre'
+        my_bool = my_bool and interpolant_choice != 'monomial'
+        if my_bool:
+            string_err = "{0} is not a valid interpolant.\n".format(interpolant_choice)
+            string_err+= "legendre, chebyshev, and monomial are the choices."
+            raise ValueError(string_err)
         # function pass, must be vectorized
         self.function = f
         self.lower_bound = 0
@@ -82,29 +89,29 @@ class Interpolant(object):
                 C.append(np.float64(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
-    def transform(self, x):
-        scale = x/(self.upper_bound - self.lower_bound)
-        return 2*scale - self.lower_bound - 1
+    def transform(self, x, a, b):
+        #scale = (x - self.lower_bound)/(self.upper_bound - self.lower_bound)
+        scale = (x - a)/(b - a)
+        return 2*scale - 1
 
     # evaluate the given basis function for whatever order given
     # if basis other than those specified is given, monomials is used
     # x can be array but this was built in the class for it to be a number
-    def basis_function(self, x, order, basis):
+    def basis_function(self, x, order, basis, a, b):
         if (basis == 'legendre'):
-            return self.legendre(order, self.transform(x))
+            return self.legendre(order, self.transform(x, a, b))
         elif (basis == 'chebyshev'):
-            return self.chebyshev(order, self.transform(x))
+            return self.chebyshev(order, self.transform(x, a, b))
         else:
-            z = self.transform(x)
-            return np.array([z**i for i in range(int(order)+1)], dtype=np.float64)
+            return np.array([x**i for i in range(int(order)+1)], dtype=np.float64)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array
     # coeff is coefficients of a basis (string) of a given order (integer)
-    def eval_coeff(self, coeff, x, basis, order):
+    def eval_coeff(self, coeff, x, basis, order, a, b):
         my_vals = []
         for x0 in x:
-            xs = self.basis_function(x0, order, basis)
+            xs = self.basis_function(x0, order, basis, a, b)
             val = np.dot(coeff, xs)
             my_vals.append(val)
         return np.array(my_vals, dtype=np.float64)
@@ -121,29 +128,25 @@ class Interpolant(object):
 
     # get nodes for interpolation on the interval (a, b)
     def get_nodes(self, a, b, order):
-        node_number = order+1
+        # create order + 1 number of nodes
+        n = order+1
         # choose nodes that are spaced like the chebyshev nodes
         if self.node_choice == 'chebyshev':
-            nodes = self.get_cheb(a, b, node_number)
-        # choose nodes at random
-        # beta function is used to prefer points near edges
-        elif self.node_choice == 'random':
-            nodes = (b-a)*np.random.beta(.5, .5, node_number, dtype=np.float64) + a
-            # make sure endpoints are properly set
-            nodes[0], nodes[-1] = a, b
+            nodes = self.get_cheb(a, b, n)
         # otherwise, create equispaced nodes
         else:
-            nodes = np.linspace(a, b, node_number, endpoint=True, dtype=np.float64)
+            nodes = np.linspace(a, b, n, endpoint=True, dtype=np.float64)
         return nodes
 
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
-    def interpolate(self, nodes, basis):
+    def interpolate(self, nodes, basis, a, b):
         length = len(nodes)
         V = np.outer(np.ones(length), np.ones(length))
         # Build vandermonde matrix
         for i in range(length):
-            V[i, :] = self.basis_function(nodes[i], length-1, basis)
+            V[i, :] = self.basis_function(nodes[i], length-1, basis, a, b)
+        #print(la.cond(V), "\t", a, b)
         # try to solve for coefficients, if there is a singular matrix
         # or some other error then return [0] to indicate an error
         try: return la.solve(V, self.function(nodes))
@@ -159,17 +162,20 @@ class Interpolant(object):
         num_points = max(abs(b-a)*1000, self.max_order*100)
         eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2), dtype=np.float64)
         actual = self.function(eval_points)
-        approx = self.eval_coeff(coeff, eval_points, self.basis, order)
+        approx = self.eval_coeff(coeff, eval_points, self.basis, order, a, b)
         # find maximum relative error in the given interval
         rel_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
         return rel_error
 
     # finds error using the max val as the max on the entire interval, not the current
+    # below is the max number of points that can be evaluated exactly
+    #(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
     def find_error_new(self, coeff, a, b, order):
-        n = int(5e3*(b-a)+1)#5*(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
-        full_x = np.linspace(self.lower_bound, self.upper_bound, 100, dtype=np.float64)
+        n = max(abs(b-a)*1e3, self.max_order*1e3)
+        num_nodes = 100*(self.upper_bound - self.lower_bound)
+        full_x = np.linspace(self.lower_bound, self.upper_bound, num_nodes, dtype=np.float64)
         x = np.linspace(a, b, n, dtype=np.float64)
-        approx = self.eval_coeff(coeff, x, self.basis, order)
+        approx = self.eval_coeff(coeff, x, self.basis, order, a, b)
         actual = self.function(x)
         max_abs_err = la.norm(approx - actual, np.inf)
         max_val_full_int = la.norm(self.function(full_x), np.inf)
@@ -181,8 +187,9 @@ class Interpolant(object):
         # prevent from refining the interval too greatly
         # allow only 20 levels of refinement
         if (index >= 2**(self.max_recur+1)):
-            string_err0 = "Recursed too far. Try a higher order interpolant\n"
-            string_err0+= "or raise the allowed error."
+            string_err0 = "Recursed too far. Try changing the order of\n"
+            string_err0+= "the interpolant used, raise the allowed error,\n"
+            string_err0+= "or set accurate=False.\n"
             if self.guaranteed_accurate:
                 raise ValueError(string_err0)
             else:
@@ -190,16 +197,19 @@ class Interpolant(object):
         # get nodes to evaluate interpolant with
         nodes = self.get_nodes(a, b, self.max_order)
         # get coefficients of interpolant defined on the nodes
-        # in new version replace with self.Remez(nodes)
-        temp = self.interpolate(nodes, self.basis)
+        # guaranteed to never give a singular matrix
+        temp = self.interpolate(nodes, self.basis, a, b)
         if temp[0] != 0:
             coeff = temp
         else:
             string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
             string_err1+= "If using monomials try using an orthogonal polynomial.\n"
-            string_err1+= "Otherwise, try a higher order interpolant or lower the\n"
-            string_err1+= 'allowed error.'
-            raise ValueError(string_err1)
+            string_err1+= "Otherwise, try a different order interpolant, lower the\n"
+            string_err1+= "allowed error, or set accurate=False\n"
+            if self.guaranteed_accurate:
+                raise ValueError(string_err1)
+            else:
+                return
         # calculate the maximum relative error on the interval
         # using these coefficients
         this_error = self.find_error_new(coeff, a, b, self.max_order)
@@ -218,8 +228,9 @@ class Interpolant(object):
     def variable_order_adapt(self, a, b, index):
         # recursed too far, 15 levels down
         if (index >= 2**(self.max_recur+1)): 
-            string_err0 = "Recursed too far. Try a higher order interpolant\n"
-            string_err0+= "or raise the allowed error allowed."
+            string_err0 = "Recursed too far. Try changing the order\n"
+            string_err0+= "of the interpolant used, raise the allowed error,\n"
+            string_err0+= "or set accurate=False."
             if self.guaranteed_accurate:
                 raise ValueError(string_err0)
             else:
@@ -230,9 +241,8 @@ class Interpolant(object):
         coeff = [0]
         # check orders 0 to max_order
         for curr_order in range(int(self.max_order)+1):
-            # only the monomial choice can be evaluated in the
             nodes = self.get_nodes(a, b, curr_order)
-            curr_coeff = self.interpolate(nodes, self.basis)
+            curr_coeff = self.interpolate(nodes, self.basis, a, b)
             # if you get a singular matrix, break the for loop
             if curr_coeff[0] == 0: break
             error = self.find_error_new(curr_coeff, a, b, curr_order)
@@ -276,5 +286,6 @@ def adaptive(lower_bound, upper_bound, function, order, error,
                            np.float64(error), interpolant_choice,
                            node_choice, guaranteed_accurate)
     my_adapt.run_adapt(np.float64(lower_bound),
-		       np.float64(upper_bound), variable)
+                       np.float64(upper_bound), variable)
     return my_adapt
+
