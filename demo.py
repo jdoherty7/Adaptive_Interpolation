@@ -153,18 +153,18 @@ def main_demo():
     print("The code generated to evaluate each function will also be displayed.")
     # method interpolates a bessel function
     print("\n0th order Bessel Function")
-    demo_adapt(f, 10, 1e-13, 'legendre')
+    demo_adapt(f, 10, 1e-13, 'chebyshev')
     # method interpolating a exact function
     print("\nsin(1/x)")
     my_f = lambda x: np.sin(np.float64(1.)/x)
     demo_adapt(my_f, 20, 1e-10, 'chebyshev', a=.01, b=1)
     # variable order interpolation method
     print("\nA piecewise function")
-    demo_adapt_variable(f1, 10, 1e-4, 'chebyshev')
+    demo_adapt_variable(f1, 6, 1e-4, 'chebyshev')
 
 
 # run the main program
 if __name__ == "__main__":
-    #main_demo()
-    demo_adapt_variable(f1, 3, 6e-1, 'chebyshev')
+    main_demo()
+    #demo_adapt_variable(f1, 5, 1e-4, 'chebyshev')
 

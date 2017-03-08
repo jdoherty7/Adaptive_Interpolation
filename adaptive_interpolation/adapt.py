@@ -90,7 +90,6 @@ class Interpolant(object):
             return np.array(C)
 
     def transform(self, x, a, b):
-        #scale = (x - self.lower_bound)/(self.upper_bound - self.lower_bound)
         scale = (x - a)/(b - a)
         return 2*scale - 1
 
@@ -146,7 +145,7 @@ class Interpolant(object):
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis, a, b)
-        print(a, b, "\t\t", la.cond(V))
+        #print(a, b, "\t\t", la.cond(V))
         # try to solve for coefficients, if there is a singular matrix
         # or some other error then return [0] to indicate an error
         try: return la.solve(V, self.function(nodes))
@@ -170,8 +169,9 @@ class Interpolant(object):
     # finds error using the max val as the max on the entire interval, not the current
     # below is the max number of points that can be evaluated exactly
     #(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
-    def find_error_new(self, coeff, a, b, order):
-        n = max(abs(b-a)*1e2+10, 1e2)
+    def find_error_new(self, coeff, a, b, order, var=False):
+        if var: n = int(abs(b-a)*5e3 + 1)
+        else: n = int(abs(b-a)*1e3+100)
         num_nodes = 100*(self.upper_bound - self.lower_bound)
         full_x = np.linspace(self.lower_bound, self.upper_bound, num_nodes, dtype=np.float64)
         x = np.linspace(a, b, n, dtype=np.float64)
@@ -245,7 +245,7 @@ class Interpolant(object):
             curr_coeff = self.interpolate(nodes, self.basis, a, b)
             # if you get a singular matrix, break the for loop
             if curr_coeff[0] == 0: break
-            error = self.find_error_new(curr_coeff, a, b, curr_order)
+            error = self.find_error_new(curr_coeff, a, b, curr_order, var=True)
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
