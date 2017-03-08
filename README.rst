@@ -13,15 +13,13 @@ Quick and Easy Demonstration
 ----------------------------
 
 To see a demonstration of this code first clone this git repository to
-your machine using:
+your machine using::
 
-::
     git clone https://www.github.com/jdoherty7/Adaptive_Interpolation
 
 
-Then run the demonstration by entering the cloned directory and running:
+Then run the demonstration by entering the cloned directory and running::
 
-::
     python demo.py
 
 
