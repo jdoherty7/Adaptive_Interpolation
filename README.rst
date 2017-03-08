@@ -11,12 +11,14 @@ run in the library using a method that uses pyopencl to run the code in parallel
 To see a demonstration of this code first clone this git repository to
 your machine using:
 
-```git clone https://www.github.com/jdoherty7/Adaptive_Interpolation
+```
+git clone https://www.github.com/jdoherty7/Adaptive_Interpolation
 ```
 
 Then run the demonstration by entering the cloned directory and running:
 
-```python demo.py
+```
+python demo.py
 ```
 
 The code should begin interpolating three functions. One is a bessel function,
