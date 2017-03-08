@@ -1,23 +1,27 @@
-# Adaptive Interpolation Project (BETA)
+=====================================
+Adaptive Interpolation Project (BETA)
+=====================================
+
 This is a pythonic method for creating an approximation for a function
 on a given domain with a specified error. It is done by adaptively interpolating
 said function on the domain until the allowed error is reached. C code is then
 generated and returned which evaluates said interpolant. This code can then be
 run in the library using a method that uses pyopencl to run the code in parallel.
 
-
-# Quick and Easy Demonstration
+----------------------------
+Quick and Easy Demonstration
+----------------------------
 
 To see a demonstration of this code first clone this git repository to
 your machine using:
 
-```
+``
 git clone https://www.github.com/jdoherty7/Adaptive_Interpolation
-```
+``
 
 Then run the demonstration by entering the cloned directory and running:
 
-```
+``
 python demo.py
 ```
 
