@@ -160,11 +160,11 @@ def main_demo():
     demo_adapt(my_f, 20, 1e-10, 'chebyshev', a=.01, b=1)
     # variable order interpolation method
     print("\nA piecewise function")
-    #demo_adapt_variable(f1, 10, 1e-4, 'chebyshev')
+    demo_adapt_variable(f1, 10, 1e-4, 'chebyshev')
 
 
 # run the main program
 if __name__ == "__main__":
-    main_demo()
-    #demo_adapt(f1, 10, 1e-1, 'chebyshev', b=7)
+    #main_demo()
+    demo_adapt_variable(f1, 3, 6e-1, 'chebyshev')
 

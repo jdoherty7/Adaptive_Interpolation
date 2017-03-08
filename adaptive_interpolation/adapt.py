@@ -146,7 +146,7 @@ class Interpolant(object):
         # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis, a, b)
-        #print(la.cond(V), "\t", a, b)
+        print(a, b, "\t\t", la.cond(V))
         # try to solve for coefficients, if there is a singular matrix
         # or some other error then return [0] to indicate an error
         try: return la.solve(V, self.function(nodes))
@@ -171,7 +171,7 @@ class Interpolant(object):
     # below is the max number of points that can be evaluated exactly
     #(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
     def find_error_new(self, coeff, a, b, order):
-        n = max(abs(b-a)*1e3, self.max_order*1e3)
+        n = max(abs(b-a)*1e2+10, 1e2)
         num_nodes = 100*(self.upper_bound - self.lower_bound)
         full_x = np.linspace(self.lower_bound, self.upper_bound, num_nodes, dtype=np.float64)
         x = np.linspace(a, b, n, dtype=np.float64)
