@@ -41,26 +41,21 @@ class Interpolant(object):
         self.allowed_error = error
         self.guaranteed_accurate = guaranteed_accurate
 
+    # Equate every empty child with its parent so that the tree is full
+    # // rounds down to obtain parent node
     def make_full_tree(self):
         for i in range(len(self.heap)):
             if self.heap[i] == 0:
-                # if empty then equate to its parent, ints will round down.
                 self.heap[i] = self.heap[i//2]
 
-    # function to add data to the heap
+    # function to add data to the heap, if data being added is larger
+    # than the current size of the heap then double its size (adds new level)
     def add_to_heap(self, data, index):
-        # if index is before the root
         if index < 1:
-            print("Error, heap index must be > 0")
-            return
-        # if the index is beyond the size of the heap
-        # then the heap size should be doubled
+            raise ValueError("Error, heap index must be > 0")
         elif len(self.heap) <= index:
-            # double length of array if it is too small
-            # this adds enough space for a new level in the tree
             for i in range(len(self.heap)):
                 self.heap.append(0)
-        # add to heap after possibly expanding the heap
         self.heap[index] = data
 
     # function to evaluate Legendre polynomials of a number, x, up to order n
@@ -89,18 +84,18 @@ class Interpolant(object):
                 C.append(np.float64(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
+    # transformation for othroganal functions, from [a, b] -> [-1, 1]
     def transform(self, x, a, b):
         scale = (x - a)/(b - a)
         return 2*scale - 1
 
-    # evaluate the given basis function for whatever order given
-    # if basis other than those specified is given, monomials is used
-    # x can be array but this was built in the class for it to be a number
-    def basis_function(self, x, order, basis, a, b):
+    # given an order an a number, x. the polynomials of order 0 to n
+    # are returned, evaluated for the given number.
+    def basis_function(self, x, n, basis, a, b):
         if (basis == 'legendre'):
-            return self.legendre(order, self.transform(x, a, b))
+            return self.legendre(n, self.transform(x, a, b))
         elif (basis == 'chebyshev'):
-            return self.chebyshev(order, self.transform(x, a, b))
+            return self.chebyshev(n, self.transform(x, a, b))
         else:
             return np.array([x**i for i in range(int(order)+1)], dtype=np.float64)
 
@@ -169,11 +164,11 @@ class Interpolant(object):
     # finds error using the max val as the max on the entire interval, not the current
     # below is the max number of points that can be evaluated exactly
     #(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
-    def find_error_new(self, coeff, a, b, order, var=False):
-        if var: n = int(abs(b-a)*5e3 + 1)
-        else: n = int(abs(b-a)*1e3+100)
-        num_nodes = 100*(self.upper_bound - self.lower_bound)
-        full_x = np.linspace(self.lower_bound, self.upper_bound, num_nodes, dtype=np.float64)
+    def find_error_new(self, coeff, a, b, order):
+        n = min(5e3, int((b-a)/self.allowed_error)+1)
+        lb, ub = self.lower_bound, self.upper_bound
+        num_nodes = 100*(ub - lb)
+        full_x = np.linspace(lb, ub, num_nodes, dtype=np.float64)
         x = np.linspace(a, b, n, dtype=np.float64)
         approx = self.eval_coeff(coeff, x, self.basis, order, a, b)
         actual = self.function(x)
@@ -245,7 +240,7 @@ class Interpolant(object):
             curr_coeff = self.interpolate(nodes, self.basis, a, b)
             # if you get a singular matrix, break the for loop
             if curr_coeff[0] == 0: break
-            error = self.find_error_new(curr_coeff, a, b, curr_order, var=True)
+            error = self.find_error_new(curr_coeff, a, b, curr_order)
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
@@ -256,22 +251,121 @@ class Interpolant(object):
         padded = np.zeros((int(self.max_order)+1,))
         padded[:coeff.shape[0]] = coeff
         self.add_to_heap([(a+b)/2., padded, self.basis, [a, b], min_error], index)
-        # if there is a discontinuity then b-a will be very small
-        # but the error will still be quite large, the resolution
-        # the second term combats that.
         if (min_error > self.allowed_error):
-            # adapt on the left subinterval and right subinterval
             self.variable_order_adapt(a, (a+b)/2., 2*index)
             self.variable_order_adapt((a+b)/2., b, 2*index + 1)
 
+
+    ########################################################
+    #                                                      #
+    # Section Containing Functions for Remez interpolation #
+    #                                                      #
+    ########################################################
+
+
+    # find interpolated coefficients given a basis for
+    # evaluation and nodes to evaluate the function at.
+    # n is order
+    def solve_remez_system(self, nodes, n, a, b):
+        length = nodes.shape[0]
+        V = np.outer(np.ones(length), np.ones(length))
+        for i in range(length):
+            V[i, :-1] = self.basis_function(nodes[i], n, self.basis, a, b)
+            V[i, -1] = (-1)**(i+1)
+        try: return la.solve(V, function(nodes))
+        except: return [0]
+
+    # update node choices based on places with maximum error near
+    # the current node choices, leave endpoints as is
+    # if order 0 is used the nodes are not changed
+    def update_nodes(self, nodes, coeff, n, a, b):
+        if nodes.shape[0] > 2:
+            err = lambda x: np.abs(self.eval_coeff(coeff, x, self.basis, n,
+                                   a, b) - self.function(x))
+            new_nodes = np.zeros(len(nodes))
+            new_nodes[0] = nodes[0]
+            new_nodes[-1] = nodes[-1]
+            for i in range(1, len(nodes)-1):
+                c, d = (new_nodes[i-1] + nodes[i])/2, (nodes[i] + nodes[i+1])/2
+                x = np.linspace(c, d, 1e3)
+                new_nodes[i] = x[np.argmax(err(x))]
+            return new_nodes
+        else:
+            return nodes
+
+    def check_eq_alt(self, array, error):
+        tolerance = 1e-15
+        the_sum = abs(np.sum(array))
+        diff = abs(the_sum - abs(error))
+        alternate = min(diff, the_sum)
+        equal = abs(abs(array[0]) - error)
+        if alternate <= tolerance and equal <=tolerance:
+            print("Minimax Polynomial Found")
+            return True
+        else:
+            print("Not Minimax Polynomial")
+            return False
+
+    def remez(self, a, b, n):
+        remez_nodes = self.get_cheb(a, b, n+2)
+        x = np.linspace(a, b, 1e3)
+        #while (1):
+        for _ in range(20):
+            solution = self.solve_remez_system(remez_nodes, n, self.basis)
+            if solution == [0]: return solution # singular matrix
+            coeff = solution[:-1]
+            error = abs(solution[-1])
+            M = self.update_nodes(remez_nodes, coeff, n)
+            err = lambda x: self.eval_coeff(coeff, x, self.basis, n,
+                                            a, b) - self.function(x)
+            if check_eq_alt(err(M), error): break
+            if M.shape[0] == remez_nodes.shape[0]:
+                remez_nodes = M
+            else:
+                raise ValueError("M not same size as X")
+        return coeff
+
+
+    # adaptive method utilizing the remez algorithm for interpolation
+    def remez_adapt(self, a, b, index):
+        if (index >= 2**(self.max_recur+1)):
+            string_err0 = "Recursed too far. Try changing the order of\n"
+            string_err0+= "the interpolant used, raise the allowed error,\n"
+            string_err0+= "or set accurate=False.\n"
+            if self.guaranteed_accurate:
+                raise ValueError(string_err0)
+            else:
+                return
+        # get coeff on interval utilizing the remez algorithm
+        coeff = self.remez(a, b, self.max_order)
+        if temp[0] != 0:
+            coeff = temp
+        elif self.guaranteed_accurate:
+            string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
+            string_err1+= "If using monomials try using an orthogonal polynomial.\n"
+            string_err1+= "Otherwise, try a different order interpolant, lower the\n"
+            string_err1+= "allowed error, or set accurate=False\n"
+            raise ValueError(string_err1)
+        else:
+            return
+        this_error = self.find_error_new(coeff, a, b, self.max_order)
+        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
+        if (this_error > self.allowed_error):
+            # adapt on the left subinterval then the right subinterval
+            self.adapt(a, (a+b)/2., 2*index)
+            self.adapt((a+b)/2., b, 2*index+1)
+
+
     # Method to run the adaptive method initially
-    def run_adapt(self, lower_bound, upper_bound, variable_order=False):
+    def run_adapt(self, lower_bound, upper_bound, adapt_type):
         if upper_bound <= lower_bound:
             raise Exception("Upper bound must be greater than lower bound.")
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
-        if variable_order:
+        if adapt_type == "Variable":
             self.variable_order_adapt(lower_bound, upper_bound, 1)
+        elif adapt_type == "Remez":
+            self.remez_adapt(lower_bound, upper_bound, 1)
         else:
             self.adapt(lower_bound, upper_bound, 1)
         self.make_full_tree()
@@ -281,7 +375,7 @@ class Interpolant(object):
 # function that creates and then runs an adaptive method.
 def adaptive(lower_bound, upper_bound, function, order, error,
              interpolant_choice, node_choice,
-             variable=False, guaranteed_accurate=True):
+             adapt_type="Trivial", guaranteed_accurate=True):
     my_adapt = Interpolant(function, np.float64(order),
                            np.float64(error), interpolant_choice,
                            node_choice, guaranteed_accurate)

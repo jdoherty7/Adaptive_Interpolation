@@ -12,50 +12,11 @@ import adaptive_interpolation.generate as generate
 # takes an interval from a to b, a function, an interpolant order, and a
 # maximum allowed error and returns an Approximator class representing
 # a monomial interpolant that fits those parameters
-def make_monomial_interpolant(a, b, func, order, error,
-                              variable=False, accurate=True):
-    # node type used random and cheb are options, otherwise equispaced is used
-    nt = 'chebyshev'
-    # chebyshev, legendre, or monomials
-    interp_choice = 'monomial'
-
+def make_interpolant(a, b, func, order, error, basis="chebyshev"
+                      adapt_type="Trivial", accurate=True):
     adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
                                  np.float64(order), np.float64(error),
-                                 interp_choice, nt, variable, accurate)
-    return app.Approximator(adapt_class)
-
-
-# takes an interval from a to b, a function, an interpolant order, and a
-# maximum allowed error and returns an Approximator class representing
-# a chebyshev interpolant that fits those parameters
-def make_chebyshev_interpolant(a, b, func, order, error,
-                               variable=False, accurate=True):
-    # interpolant parameters
-    # node type used random and cheb are options, otherwise equispaced is used
-    nt = 'chebyshev'
-    # chebyshev, legendre, or monomials
-    interp_choice = 'chebyshev'
-
-    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
-                                 np.float64(order), np.float64(error),
-                                 interp_choice, nt, variable, accurate)
-    return app.Approximator(adapt_class)
-
-
-# takes an interval from a to b, a function, an interpolant order, and a
-# maximum allowed error and returns an Approximator class representing
-# a legendre interpolant that fits those parameters
-def make_legendre_interpolant(a, b, func, order, error,
-                              variable=False, accurate=True):
-    # interpolant parameters
-    # node type used random and cheb are options, otherwise equispaced is used
-    nt = 'chebyshev'
-    # chebyshev, legendre, or monomials
-    interp_choice = 'legendre'
-
-    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
-                                 np.float64(order), np.float64(error),
-                                 interp_choice, nt, variable, accurate)
+                                 interp_choice, variable, accurate)
     return app.Approximator(adapt_class)
 
 
@@ -121,7 +82,7 @@ def generate_code(approx, branching=0, vectorized=1, domain_size=None):
 # use to save the generated code for later use
 # NOTE: this only works if run from main directory, where
 # the folder generated_code exists
-def save_code(file_name, code):
+def save_approximation(file_name, approximation):
     my_file = open("generated_code/"+file_name+".txt", "w")
     my_file.write(code)
     my_file.close()
@@ -130,7 +91,7 @@ def save_code(file_name, code):
 # get a string of the C code that was previously saved
 # NOTE: this only works if run from main directory, where
 # the folder generated_code exists
-def get_saved_code(file_name):
+def get_saved_approximation(file_name):
     my_file = open("generated_code/"+file_name+".txt", "r")
     # code is just on first line of file, so get this then run it
     code = my_file.readline()
