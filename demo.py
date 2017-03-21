@@ -26,6 +26,7 @@ except:
 
 # bessel function for testing
 def f(x):
+    return np.sin(1./x)
     return spec.jn(0, x)
 
 def g(x):
@@ -89,7 +90,7 @@ def demo_adapt(function, order, allowed_error, basis,
     my_approx = adapt_i.make_interpolant(a, b, function, order, 
                             allowed_error, basis, adapt_type, accurate)
 
-    print("Generating Code")
+    print("\nGenerated Code:\n")
     code = adapt_i.generate_code(my_approx)
     print(code)
     print("Evaluating Interpolant")
@@ -110,7 +111,7 @@ def demo_adapt(function, order, allowed_error, basis,
         ims = []
         # traverse levels 1 to end
         for i in range(int(my_approx.num_levels)):
-            print("Level: ", i, '/', my_approx.num_levels-1)
+            print("Plotting Level: ", i, '/', my_approx.num_levels-1)
             ims.append([])
             im0, = ax1.plot(x, function(x), 'r')
             rel, = ax2.plot(x, 0*x+allowed_error, 'r')
@@ -184,5 +185,5 @@ def main_demo():
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f, 5, 1e-4, 'chebyshev', adapt_type='remez', animate=True )
+    demo_adapt(f, 20, 1e-4, 'chebyshev', adapt_type='remez', animate=True, a=.03, b=1 )
 

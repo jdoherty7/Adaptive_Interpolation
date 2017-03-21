@@ -250,15 +250,14 @@ class Interpolant(object):
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
     # n is order
-    def solve_remez_system(self, nodes, n, a, b):
-        length = nodes.shape[0]
+    def solve_remez_system(self, nodes, order, a, b):
+        n = int(order)
+        length = n + 2
         V = np.outer(np.ones(length), np.ones(length))
         for i in range(length):
             V[i, :-1] = self.basis_function(nodes[i], n, self.basis, a, b)
             V[i, -1] = (-1)**(i+1)
-        print(V)
-        print(nodes)
-        try: return la.solve(V, function(nodes))
+        try: return la.solve(V, self.function(nodes))
         except: return None
 
     # update node choices based on places with maximum error near
@@ -286,10 +285,8 @@ class Interpolant(object):
         alternate = min(diff, the_sum)
         equal = abs(abs(array[0]) - error)
         if alternate <= tolerance and equal <=tolerance:
-            print("Minimax Polynomial Found")
             return True
         else:
-            print("Not Minimax Polynomial")
             return False
 
     def remez(self, a, b, n):
@@ -301,15 +298,15 @@ class Interpolant(object):
             if solution is None: return solution # singular matrix
             coeff = solution[:-1]
             error = abs(solution[-1])
-            M = self.update_nodes(remez_nodes, coeff, n)
+            M = self.update_nodes(remez_nodes, coeff, n, a, b)
             err = lambda x: self.eval_coeff(coeff, x, self.basis, n,
                                             a, b) - self.function(x)
-            if check_eq_alt(err(M), error): break
+            if self.check_eq_alt(err(M), error): break
             if M.shape[0] == remez_nodes.shape[0]:
                 remez_nodes = M
             else:
                 raise ValueError("M not same size as X")
-        return coeff
+        return coeff, M
 
 
     # adaptive method utilizing the remez algorithm for interpolation
@@ -323,7 +320,7 @@ class Interpolant(object):
             else:
                 return
         # get coeff on interval utilizing the remez algorithm
-        temp = self.remez(a, b, self.max_order)
+        temp, M = self.remez(a, b, self.max_order)
         if temp is not None:
             coeff = temp
         elif self.guaranteed_accurate:
@@ -340,7 +337,8 @@ class Interpolant(object):
             # adapt on the left subinterval then the right subinterval
             self.adapt(a, (a+b)/2., 2*index)
             self.adapt((a+b)/2., b, 2*index+1)
-
+            #self.adapt(a, M[int(len(M)/2)], 2*index)
+            #self.adapt(M[int(len(M)/2)], b, 2*index+1)
 
     # Method to run the adaptive method initially
     def run_adapt(self, lower_bound, upper_bound, adapt_type):
