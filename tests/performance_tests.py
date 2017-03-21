@@ -8,6 +8,7 @@ from future import __absoulte_import__
 from nose.tools import *
 
 import time
+import timeit
 import numpy as np
 import numpy.linalg as la
 import scipy.special as spec
@@ -62,8 +63,8 @@ def my_plot(x, actual, approximation, abs_errors):
 # Given a specific Approximator class, this will test how the
 # performance and accuracy varies when the code is varied from branching
 # and vectorized to not branching and not vectorized
-def test_parallel_methods(approx):
-    size = 1e6
+def test_parallel(approx):
+    size = 1e7
     interval = approx.heap[1][3]
     x = np.linspace(interval[0], inverval[1], size, dtype=np.float64)
     nb_nv = adapt_i.generate_code(approx, 0, 0)
@@ -71,11 +72,42 @@ def test_parallel_methods(approx):
     b_nv  = adapt_i.generate_code(approx, 1, 0, size)
     b_v   = adapt_i.generate_code(approx, 1, 1, size)
 
-    # time these tests and return times
+    # time run_code functions and return times
+    t00 = time.time()
     val_00 = run_code(nb_nv, x, approx=0, vectorized=False)
+    t00 = time.time() - t00
+    t01 = time.time()
     val_01 = run_code(nb_v,  x, approx,   vectorized=True)
+    t01 = time.time() - t01
+    t10 = time.time()
     val_10 = run_code(b_nv,  x, approx=0, vectorized=False)
+    t10 = time.time() - t10
+    t11 = time.time()
     val_11 = run_code(b_v,   x, approx,   vectorized=True)
+    t11 = time.time() - t11
+
+    # function values are independent of generative method
+    assert la.norm(val00 - val01, np.inf) < 1e-15
+    assert la.norm(val00 - val10, np.inf) < 1e-15
+    assert la.norm(val00 - val11, np.inf) < 1e-15
+    assert la.norm(val01 - val10, np.inf) < 1e-15
+    assert la.norm(val01 - val11, np.inf) < 1e-15
+    assert la.norm(val10 - val11, np.inf) < 1e-15
+
+    print("nb_nv\tnb_v\tb_nv\tb_v")
+    print(t00,'\t', t01, '\t', t10,'\t', t11)
+    return [t00, t01, t10, t11]
+
+
+def test_all_parallel_methods():
+    a, b = 0, 10
+    est1 = adapt_i.make_interpolant(a, b, f, 3, 1e-9, "monomial")
+    est2 = adapt_i.make_interpolant(a, b, f, 3, 1e-9, "chebyshev")
+    est3 = adapt_i.make_interpolant(a, b, f, 3, 1e-9, "legendre")
+
+    test_parallel(est1)
+    test_parallel(est2)
+    test_parallel(est3)
 
 
 def test_exact_interpolants():
@@ -86,10 +118,10 @@ def test_exact_interpolants():
 
     a, b = -10, 10
     x = np.linspace(a, b, 100, dtype=np.float64)
-    est1 = adapt_i.make_monomial_interpolant(a,b,order1,1,1e-9).evaluate(x)
-    est4 = adapt_i.make_monomial_interpolant(a,b,order4,4,1e-9).evaluate(x)
-    est6 = adapt_i.make_monomial_interpolant(a,b,order6,6,1e-9).evaluate(x)
-    est8 = adapt_i.make_monomial_interpolant(a,b,order8,8,1e-9).evaluate(x)
+    est1 = adapt_i.make_interpolant(a,b,order1,1,1e-9, "monomial").evaluate(x)
+    est4 = adapt_i.make_interpolant(a,b,order4,4,1e-9, "monomial").evaluate(x)
+    est6 = adapt_i.make_interpolant(a,b,order6,6,1e-9, "monomial").evaluate(x)
+    est8 = adapt_i.make_interpolant(a,b,order8,8,1e-9, "monomial").evaluate(x)
 
     assert la.norm(est1-order1(x), np.inf)/la.norm(order1(x), np.inf) < 1e-15
     assert la.norm(est4-order4(x), np.inf)/la.norm(order4(x), np.inf) < 1e-15
@@ -106,17 +138,17 @@ def test_guaranteed_accuracy():
     a, b = -10, 10
     x = np.linspace(a, b, 100, dtype=np.float64)
 
-    est31 = adapt_i.make_chebyshev_interpolant(a,b,func1,10,1e-3).evaluate(x)
-    est32 = adapt_i.make_legendre_interpolant(a,b,func2,10,1e-3).evaluate(x)
-    est33 = adapt_i.make_monomial_interpolant(a,b,func3,10,1e-3).evaluate(x)
+    est31 = adapt_i.make_interpolant(a,b,func1,10,1e-3, "monomial").evaluate(x)
+    est32 = adapt_i.make_interpolant(a,b,func2,10,1e-3, "chebyshev").evaluate(x)
+    est33 = adapt_i.make_interpolant(a,b,func3,10,1e-3, "legendre").evaluate(x)
 
-    est61 = adapt_i.make_chebyshev_interpolant(a,b,func1,10,1e-6).evaluate(x)
-    est62 = adapt_i.make_legendre_interpolant(a,b,func2,10,1e-6).evaluate(x)
-    est63 = adapt_i.make_monomial_interpolant(a,b,func3,10,1e-6).evaluate(x)
+    est61 = adapt_i.make_interpolant(a,b,func1,10,1e-6, "monomial").evaluate(x)
+    est62 = adapt_i.make_interpolant(a,b,func2,10,1e-6, "chebyshev").evaluate(x)
+    est63 = adapt_i.make_interpolant(a,b,func3,10,1e-6, "legendre").evaluate(x)
 
-    est91 = adapt_i.make_chebyshev_interpolant(a,b,func1,10,1e-9).evaluate(x)
-    est92 = adapt_i.make_legendre_interpolant(a,b,func2,10,1e-9).evaluate(x)
-    est93 = adapt_i.make_monomial_interpolant(a,b,func3,10,1e-9).evaluate(x)
+    est91 = adapt_i.make_interpolant(a,b,func1,10,1e-9, "monomial").evaluate(x)
+    est92 = adapt_i.make_interpolant(a,b,func2,10,1e-9, "chebyshev").evaluate(x)
+    est93 = adapt_i.make_interpolant(a,b,func3,10,1e-9, "legendre").evaluate(x)
 
     assert la.norm(est31-func1(x), np.inf)/la.norm(func1(x), np.inf) < 1e-3
     assert la.norm(est32-func2(x), np.inf)/la.norm(func2(x), np.inf) < 1e-3
@@ -135,4 +167,4 @@ def test_guaranteed_accuracy():
 if __name__ == "__main__":
     test_exact_interpolants()
     test_guaranteed_accuracy()
-
+    test_all_parallel_methods()

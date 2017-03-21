@@ -12,7 +12,7 @@ class Interpolant(object):
 
     # defining parameters of an adaptive method
     def __init__(self, f, order, error, interpolant_choice, 
-                 node_choice, guaranteed_accurate=True):
+                 guaranteed_accurate=True):
         if error <= 1e-16:
             string_err = "This package currently uses doubles thus an error"
             string_err+= "tolerance of less than 1e-16 is not possible."
@@ -33,8 +33,6 @@ class Interpolant(object):
         self.max_recur = 25
         # max order allwed to create interpolation
         self.max_order = order
-        # string specifying node choice
-        self.node_choice = node_choice
         # string specifying basis choice
         self.basis = interpolant_choice
         self.heap = [0, 0]
@@ -120,27 +118,13 @@ class Interpolant(object):
         nodes = (b-a)*.5*(nodes + 1.) + a
         return nodes
 
-    # get nodes for interpolation on the interval (a, b)
-    def get_nodes(self, a, b, order):
-        # create order + 1 number of nodes
-        n = order+1
-        # choose nodes that are spaced like the chebyshev nodes
-        if self.node_choice == 'chebyshev':
-            nodes = self.get_cheb(a, b, n)
-        # otherwise, create equispaced nodes
-        else:
-            nodes = np.linspace(a, b, n, endpoint=True, dtype=np.float64)
-        return nodes
-
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
     def interpolate(self, nodes, basis, a, b):
         length = len(nodes)
         V = np.outer(np.ones(length), np.ones(length))
-        # Build vandermonde matrix
         for i in range(length):
             V[i, :] = self.basis_function(nodes[i], length-1, basis, a, b)
-        #print(a, b, "\t\t", la.cond(V))
         # try to solve for coefficients, if there is a singular matrix
         # or some other error then return [0] to indicate an error
         try: return la.solve(V, self.function(nodes))
@@ -190,7 +174,7 @@ class Interpolant(object):
             else:
                 return
         # get nodes to evaluate interpolant with
-        nodes = self.get_nodes(a, b, self.max_order)
+        nodes = self.get_cheb(a, b, self.max_order+1)
         # get coefficients of interpolant defined on the nodes
         # guaranteed to never give a singular matrix
         temp = self.interpolate(nodes, self.basis, a, b)
@@ -236,7 +220,7 @@ class Interpolant(object):
         coeff = [0]
         # check orders 0 to max_order
         for curr_order in range(int(self.max_order)+1):
-            nodes = self.get_nodes(a, b, curr_order)
+            nodes = self.get_cheb(a, b, curr_order+1)
             curr_coeff = self.interpolate(nodes, self.basis, a, b)
             # if you get a singular matrix, break the for loop
             if curr_coeff[0] == 0: break
@@ -272,8 +256,10 @@ class Interpolant(object):
         for i in range(length):
             V[i, :-1] = self.basis_function(nodes[i], n, self.basis, a, b)
             V[i, -1] = (-1)**(i+1)
+        print(V)
+        print(nodes)
         try: return la.solve(V, function(nodes))
-        except: return [0]
+        except: return None
 
     # update node choices based on places with maximum error near
     # the current node choices, leave endpoints as is
@@ -308,11 +294,11 @@ class Interpolant(object):
 
     def remez(self, a, b, n):
         remez_nodes = self.get_cheb(a, b, n+2)
-        x = np.linspace(a, b, 1e3)
+        x = np.linspace(a, b, min(5e3, (b-a)/self.allowed_error))
         #while (1):
         for _ in range(20):
-            solution = self.solve_remez_system(remez_nodes, n, self.basis)
-            if solution == [0]: return solution # singular matrix
+            solution = self.solve_remez_system(remez_nodes, n, a, b)
+            if solution is None: return solution # singular matrix
             coeff = solution[:-1]
             error = abs(solution[-1])
             M = self.update_nodes(remez_nodes, coeff, n)
@@ -337,8 +323,8 @@ class Interpolant(object):
             else:
                 return
         # get coeff on interval utilizing the remez algorithm
-        coeff = self.remez(a, b, self.max_order)
-        if temp[0] != 0:
+        temp = self.remez(a, b, self.max_order)
+        if temp is not None:
             coeff = temp
         elif self.guaranteed_accurate:
             string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
@@ -362,24 +348,11 @@ class Interpolant(object):
             raise Exception("Upper bound must be greater than lower bound.")
         self.lower_bound = lower_bound
         self.upper_bound = upper_bound
-        if adapt_type == "Variable":
+        if adapt_type.lower() == "variable":
             self.variable_order_adapt(lower_bound, upper_bound, 1)
-        elif adapt_type == "Remez":
+        elif adapt_type.lower() == "remez":
             self.remez_adapt(lower_bound, upper_bound, 1)
         else:
             self.adapt(lower_bound, upper_bound, 1)
         self.make_full_tree()
-        return self.heap
-
-
-# function that creates and then runs an adaptive method.
-def adaptive(lower_bound, upper_bound, function, order, error,
-             interpolant_choice, node_choice,
-             adapt_type="Trivial", guaranteed_accurate=True):
-    my_adapt = Interpolant(function, np.float64(order),
-                           np.float64(error), interpolant_choice,
-                           node_choice, guaranteed_accurate)
-    my_adapt.run_adapt(np.float64(lower_bound),
-                       np.float64(upper_bound), variable)
-    return my_adapt
 

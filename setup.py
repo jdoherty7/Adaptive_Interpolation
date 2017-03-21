@@ -9,7 +9,7 @@ config = {
      the interpolation using pyopencl.',
     'author' : 'John Doherty',
     'author_email' : 'muons.quarks@gmail.com',
-    'version' : '0.3',
+    'version' : '2017.0.4',
     'license' : 'MIT',
     'url' : 'https://www.github.com/jdoherty7/Adaptive_Interpolation',
     'install_requires': ['nose', 'numpy', 'matplotlib',

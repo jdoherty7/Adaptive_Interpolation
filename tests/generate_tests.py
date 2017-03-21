@@ -13,9 +13,9 @@ def test_code_execution():
     x = np.linspace(a, b, domain_size, dtype=np.float64)
     max_val = la.norm(func1(x), np.inf)
 
-    app_c = adapt_i.make_chebyshev_interpolant(a, b, func1, 10, 1e-5)
-    app_l = adapt_i.make_legendre_interpolant(a, b, func1, 10, 1e-5)
-    app_m = adapt_i.make_monomial_interpolant(a, b, func1, 10, 1e-5)
+    app_c = adapt_i.make_interpolant(a, b, func1, 10, 1e-5, "chebyshev")
+    app_l = adapt_i.make_interpolant(a, b, func1, 10, 1e-5, "legendre")
+    app_m = adapt_i.make_interpolant(a, b, func1, 10, 1e-5, "monomial")
 
     codes = []
     for i in range(2):

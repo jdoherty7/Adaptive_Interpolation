@@ -7,17 +7,22 @@ import numpy as np
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
 import adaptive_interpolation.generate as generate
+try:
+    with_pickle = True
+    import pickle
+except:
+    with_pickle = False
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
 # maximum allowed error and returns an Approximator class representing
 # a monomial interpolant that fits those parameters
-def make_interpolant(a, b, func, order, error, basis="chebyshev"
+def make_interpolant(a, b, func, order, error, basis="chebyshev",
                       adapt_type="Trivial", accurate=True):
-    adapt_class = adapt.adaptive(np.float64(a), np.float64(b), func,
-                                 np.float64(order), np.float64(error),
-                                 interp_choice, variable, accurate)
-    return app.Approximator(adapt_class)
+    my_adapt = adapt.Interpolant(func, np.float64(order),
+                                 np.float64(error), basis, accurate)
+    my_adapt.run_adapt(np.float64(a), np.float64(b), adapt_type)
+    return app.Approximator(my_adapt)
 
 
 # Given an approximator class returned from a make an interpolant function,
@@ -79,23 +84,25 @@ def generate_code(approx, branching=0, vectorized=1, domain_size=None):
     return code
 
 
-# use to save the generated code for later use
-# NOTE: this only works if run from main directory, where
-# the folder generated_code exists
-def save_approximation(file_name, approximation):
-    my_file = open("generated_code/"+file_name+".txt", "w")
-    my_file.write(code)
-    my_file.close()
+# save approximator class to the given path
+def save_approximation(path_name, approximation):
+    if with_pickle:
+        my_file = open(path_name, "w")
+        pickle.dump(approximation, my_file)
+        my_file.close()
+    else:
+        raise Exception("Save requires pickle module be installed")
 
 
-# get a string of the C code that was previously saved
-# NOTE: this only works if run from main directory, where
-# the folder generated_code exists
-def get_saved_approximation(file_name):
-    my_file = open("generated_code/"+file_name+".txt", "r")
-    # code is just on first line of file, so get this then run it
-    code = my_file.readline()
-    return code
+# load approximator class from the given path
+def get_saved_approximation(path_name):
+    if with_pickle:
+        my_file = open(path_name, "r")
+        app = pickle.load(my_file)
+        my_file.close()
+        return app
+    else:
+        raise Exception("Load requires pickle module be installed")
 
 
 # code is a string of C code to be evaluated. x is a numpy array
