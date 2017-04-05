@@ -174,6 +174,7 @@ def gen_cheb_v(ap):
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
     string += "} \n"
+    string += "index = new_index[index - {0}];".format(2**(ap.num_levels-1))
     # rescale variables
     string += "x[n] = (2/(ranges1[index] - ranges0[index]))*"
     string += "(x[n] - ranges0[index]) - 1.0;\n"
@@ -258,11 +259,13 @@ def gen_leg_vb(ap):
 # runs the code for a normal monomial basis with no transformations.
 def run_mono_vec(x, approx):
     if with_pyopencl:
-        coeff = approx.coeff_1d
-        table = approx.midpoints
-
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
+
+        queue.finish()
+
+        coeff = approx.coeff_1d
+        table = approx.midpoints
 
         x_dev = cl_array.to_device(queue, x)
         table_dev = cl_array.to_device(queue, table)
@@ -279,6 +282,10 @@ def run_mono_vec(x, approx):
         # second parameter determines how many 'code instances' to make, (1, ) is 1
         prg.sum(queue, x_dev.shape, None, table_dev.data,
                 coeff_dev.data, x_dev.data, y_dev.data)
+
+        queue.finish()
+
+
         return y_dev.get()
     else:
         raise ValueError("Function requires pyopencl installation.")
@@ -288,50 +295,68 @@ def run_mono_vec(x, approx):
 # x is the co-image of function
 def run_ortho_vec(x, approx):
     if with_pyopencl:
+        ctx = cl.create_some_context()
+        queue = cl.CommandQueue(ctx)
+
+        queue.finish()
+
         coeff = approx.coeff_1d
         table = approx.midpoints
         ranges0 = approx.ranges0
         ranges1 = approx.ranges1
+        new_index = approx.new_indices
 
-        ctx = cl.create_some_context()
-        queue = cl.CommandQueue(ctx)
+        print(coeff)
+        print(table)
+        print(ranges0)
+        print(ranges1)
+        print(new_index)
+
 
         x_dev = cl_array.to_device(queue, x)
         table_dev = cl_array.to_device(queue, table)
         coeff_dev = cl_array.to_device(queue, coeff)
         ranges0_dev = cl_array.to_device(queue, ranges0)
         ranges1_dev = cl_array.to_device(queue, ranges1)
+        new_index_dev = cl_array.to_device(queue, new_index)
         y_dev = cl_array.empty_like(x_dev)
 
         # build the code to run from given string
         declaration = "__kernel void sum(__global double *mid, "
         declaration += "__global double *coeff, __global double *ranges0, "
         declaration += "__global double *ranges1, __global double *x, "
-        declaration += "__global double *y) "
+        declaration += "__global double *y, __global double *new_index) "
         code = declaration + '{' + approx.code + '}'
 
         prg = cl.Program(ctx, code).build()
         # second parameter determines how many 'code instances' to make, (1, ) is 1
         prg.sum(queue, x_dev.shape, None, table_dev.data,
                 coeff_dev.data, ranges0_dev.data, 
-                ranges1_dev.data, x_dev.data, y_dev.data)
+                ranges1_dev.data, x_dev.data, y_dev.data, new_index_dev.data)
+
+        queue.finish()
+
         return y_dev.get()
     else:
         raise ValueError("Function requires pyopencl installation.")
 
 
-# use to save the generated code for later use
-def write_to_file(file_path, string):
-    my_file = open(file_path + ".txt", "w")
-    my_file.write(string)
+# use to save the approximator class for later use
+def write_to_file(file_path, approx):
+    my_file = open(file_path + "_code.txt", "w")
+    my_file.write(approx.code)
+    np.save(file_path + "_run_vector", approx.run_vector)
     my_file.close()
 
 
-# run the C method from the given file using the given domain
-def Run_from_file(x, file_path):
+# loads a new approximator class with the variables saved at the file path
+def load_from_file(file_path):
     my_file = open(file_path + ".txt", "r")
     # code is just on first line of file, so get this then run it
-    code = my_file.readline()
-    out = run_c(x, code)
-    return out
+    approx = Approximator()
+    approx.code = my_file.read()
+    print(approx.code)
+    approx.run_vector = np.load(file_path + "_run_vector.npy")
+    my_file.close()
+    return approx
 

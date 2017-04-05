@@ -201,6 +201,9 @@ class Interpolant(object):
             # adapt on the left subinterval then the right subinterval
             self.adapt(a, (a+b)/2., 2*index)
             self.adapt((a+b)/2., b, 2*index+1)
+        else: # use remez on last bound to get extra accuracy
+            self.remez_adapt(a, (a+b)/2., 2*index)
+            self.remez_adapt((a+b)/2., b, 2*index+1)
 
     # adaptive method finding an interpolant for a function
     # this checks multiple orders to make an interpolant
@@ -333,10 +336,10 @@ class Interpolant(object):
             return
         this_error = self.find_error_new(coeff, a, b, self.max_order)
         self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
-        if (this_error > self.allowed_error):
+        #if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
-            self.adapt(a, (a+b)/2., 2*index)
-            self.adapt((a+b)/2., b, 2*index+1)
+            #self.remez_adapt(a, (a+b)/2., 2*index)
+            #self.remez_adapt((a+b)/2., b, 2*index+1)
             #self.adapt(a, M[int(len(M)/2)], 2*index)
             #self.adapt(M[int(len(M)/2)], b, 2*index+1)
 

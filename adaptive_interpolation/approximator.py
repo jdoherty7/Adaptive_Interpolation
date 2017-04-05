@@ -18,29 +18,59 @@ import numpy as np
 # coefficients on different ranges
 class Approximator(object):
 
-    def __init__(self, my_adapt):
-        # raw array data from adaptive interpolation method
-        self.basis_function = my_adapt.basis_function
-        self.heap = my_adapt.heap
-        self.upper_bound = my_adapt.upper_bound
-        self.lower_bound = my_adapt.lower_bound
-        self.basis = my_adapt.basis
-        self.code = 0
-        self.max_order = my_adapt.max_order
-        self.num_levels = int(np.log(len(self.heap))/np.log(2))
-        self.all_ranges, self.midpoints, self.coeff = self.make_mid_coeff()
-        self.ranges0, self.ranges1 = self.make_run_ranges()
-        self.used_coeff = self.heap[-2**(self.num_levels-1):]
-        self.ranges, self.rel_errors = self.make_ranges_err()
-        self.used_midpoints = self.midpoints[-2**(self.num_levels-1):]
-        self.coeff_1d = self.make_vector_coeff()
+    def __init__(self, my_adapt=None):
+        if my_adapt != None:
+            # raw array data from adaptive interpolation method
+            self.basis_function = my_adapt.basis_function
+            self.heap = my_adapt.heap
+            self.upper_bound = my_adapt.upper_bound
+            self.lower_bound = my_adapt.lower_bound
+            self.basis = my_adapt.basis
+            self.code = 0
+            self.max_order = my_adapt.max_order
+            self.num_levels = int(np.log(len(self.heap))/np.log(2))
+            self.all_ranges, self.midpoints, self.coeff = self.make_mid_coeff()
+            self.a_ranges0, self.a_ranges1 = self.make_run_ranges()
+            self.used_coeff = self.coeff[-2**(self.num_levels-1):]
+            self.a_ranges0 = self.a_ranges0[-2**(self.num_levels-1):] 
+            self.a_ranges1 = self.a_ranges1[-2**(self.num_levels-1):]
+            self.ranges, self.rel_errors = self.make_ranges_err()
+            self.used_midpoints = self.midpoints[-2**(self.num_levels-1):]
+            self.coeff_1d = self.make_vector_coeff()
+            self.new_indices, self.run_coeff, self.ranges0, self.ranges1 = self.make_new_indices()
+            self.run_vector= 0 # 1d vector with all necessary variables
+
+        print(self.run_coeff)
+        print(self.midpoints)
+        print(self.ranges0)
+        print(self.ranges1)
+        print(self.new_indices)
+
+
+    # map from index -> coeff_1d
+    def make_new_indices(self):
+        new_array = [0] # have first index in there already, 0
+        run_coeff = [self.used_coeff[0]]
+        range0 = [self.a_ranges0[0]]
+        range1 = [self.a_ranges1[0]]
+        index = 0
+        last_coeff = self.used_coeff[0]
+        for i in range(1, len(self.used_coeff)):
+            if (not np.array_equal(last_coeff, self.used_coeff[i])):
+                index+=1;
+                run_coeff.append(self.used_coeff[i])
+                range0.append(self.a_ranges0[i])
+                range1.append(self.a_ranges1[i])
+            new_array.append(index)
+            last_coeff = self.used_coeff[i]
+        return np.array(new_array), np.array(run_coeff), np.array(range0), np.array(range1)
 
     def make_vector_coeff(self):
-        length = int(len(self.coeff)*(self.max_order + 1))
+        length = int(len(self.used_coeff)*(self.max_order + 1))
         coeff_1d = np.ones(length, dtype=np.float64)
         max_or = int(self.max_order+1)
         for i in range(length):
-            coeff_1d[i] = self.coeff[i//max_or][i%max_or]
+            coeff_1d[i] = self.used_coeff[i//max_or][i%max_or]
         return coeff_1d
 
     def make_mid_coeff(self):
@@ -103,7 +133,7 @@ class Approximator(object):
         return index
 
     # assume that the x array being evaluated is increasing
-    def evaluate(self, x):
+    def old_evaluate(self, x):
         new_x = []
         for x0 in x:
             # get index of heap element for x0 and data from that element
@@ -120,3 +150,20 @@ class Approximator(object):
             val = np.dot(np.array(coeff), xs)
             new_x.append(val)
         return np.array(new_x, dtype=np.float64)
+
+    def evaluate(self, x):
+        y = []
+        for xn in x:
+            index = 1
+            for i in range(1, self.num_levels-1):
+                if self.midpoints[index] > xn:
+                    index = 2*index
+                else:
+                    index = 2*index + 1
+            index = self.new_indices[index]
+            scale = 2./(self.ranges1[index]-self.ranges0[index])
+            xn = scale*(xn - self.ranges0[index]) - 1.0
+            xs = self.basis_function(xn, self.max_order, self.basis,
+                                     self.ranges0[index], self.ranges1[index])
+            y.append(np.dot(self.used_coeff[index], xs))
+        return y

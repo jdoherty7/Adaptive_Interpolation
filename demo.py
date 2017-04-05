@@ -26,7 +26,7 @@ except:
 
 # bessel function for testing
 def f(x):
-    return np.sin(1./x)
+    #return np.sin(1./x)
     return spec.jn(0, x)
 
 def g(x):
@@ -106,7 +106,7 @@ def demo_adapt(function, order, allowed_error, basis,
         fig = plt.figure()
         ax1 = fig.add_subplot(1,2,2)
         ax2 = fig.add_subplot(1,2,1)
-        ax1.set_ylim(-2, 2)
+        #ax1.set_ylim(-2, 2)
         ax2.set_yscale("log")
         ims = []
         # traverse levels 1 to end
@@ -185,5 +185,5 @@ def main_demo():
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f, 20, 1e-4, 'chebyshev', adapt_type='remez', animate=True, a=.03, b=1 )
+    demo_adapt(f1, 5, 2e-1, 'chebyshev', animate=True, b=10)
 
