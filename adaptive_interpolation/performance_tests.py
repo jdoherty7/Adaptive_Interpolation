@@ -4,7 +4,7 @@ the evaluation of said interpolant
 
 This is now faster than default bessel approximation!
 """
-#from __future__ import absolute_import
+from __future__ import absolute_import
 from nose.tools import *
 
 import time
@@ -12,10 +12,17 @@ import numpy as np
 import numpy.linalg as la
 import scipy.special as spec
 import matplotlib.pyplot as plt
+#import adapt as adapt
+#import approximator as app
+#import generate as generate
+#import adaptive_interpolation as adapt_i
+
+
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
 import adaptive_interpolation.generate as generate
 import adaptive_interpolation.adaptive_interpolation as adapt_i
+
 
 
 # bessel function for testing

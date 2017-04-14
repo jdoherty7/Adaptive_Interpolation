@@ -169,26 +169,29 @@ def gen_cheb_v(ap):
     order = int(ap.max_order)
     string = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
-    string += "int index = 1;\n"
-    string += "double T0, T1, Tn, s;\n"
+    string += "int index = 0;\n"
+    string += "double T0, T1, Tn, a, b, s;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
-    string += "{\n\tindex = mid[index] > x[n] ? 2*index : 2*index+1;\n"
+    string += "{\n\tindex = tree[index] > x[n] ? "
+    string += "tree[index+{0}] :".format(4+order)
+    string += "tree[index+{0}];\n".format(5+order)
     string += "} \n"
-    string += "index = new_index[index - {0}];".format(2**(ap.num_levels-1))
     # rescale variables
-    string += "x[n] = (2/(ranges1[index] - ranges0[index]))*"
-    string += "(x[n] - ranges0[index]) - 1.0;\n"
+    string += "a = tree[index+{0}];\n".format(2+order)
+    string += "b = tree[index+{0}];\n".format(3+order)
+    string += "x[n] = (2/(b - a))*(x[n] - a) - 1.0;\n"
     string += "T0 = 1.0;\n"
     if order > 0:
         string += "T1 = x[n];\n"
     # initialize the sum
-    string += "s = coeff[index*{0}+{1}]*T0;\n".format(order+1, 0)
+    string += "s = tree[index+1]*T0;\n"
     if order > 0:
-        string += "s = s + coeff[index*{0}+{1}]*T1;\n".format(order+1, 1)
+        string += "s = s + tree[index+2]*T1;\n"
     if order > 1:
-        string += "for (int j = 2; j <=" + repr(order) + "; j++) {\n"
+        # calculate order 2 through n
+        string += "for (int j = 3; j <=" + repr(order+1) + "; j++) {\n"
         string += "\tTn = 2*x[n]*T1 - T0;\n"
-        string += "\ts = s + coeff[index*{0} + j]*Tn;\n".format(order+1)
+        string += "\ts = s + tree[index + j]*Tn;\n"
         string += "\tT0 = T1;\n"
         string += "\tT1 = Tn;\n"
         string += "}\n"
@@ -293,7 +296,7 @@ def run_mono_vec(x, approx):
 
 # string is executable c code
 # x is the co-image of function
-def run_ortho_vec(x, approx):
+def run_ortho_vec_old(x, approx):
     if with_pyopencl:
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
@@ -330,6 +333,7 @@ def run_ortho_vec(x, approx):
 
         prg = cl.Program(ctx, code).build()
         # second parameter determines how many 'code instances' to make, (1, ) is 1
+        # should be x_dev.shape
         prg.sum(queue, x_dev.shape, None, table_dev.data,
                 coeff_dev.data, ranges0_dev.data, 
                 ranges1_dev.data, x_dev.data, y_dev.data, new_index_dev.data)
@@ -340,23 +344,38 @@ def run_ortho_vec(x, approx):
     else:
         raise ValueError("Function requires pyopencl installation.")
 
+# string is executable c code
+# x is the co-image of function
+def run_ortho_vec(x, approx):
+    if with_pyopencl:
+        ctx = cl.create_some_context()
+        queue = cl.CommandQueue(ctx)
 
-# use to save the approximator class for later use
-def write_to_file(file_path, approx):
-    my_file = open(file_path + "_code.txt", "w")
-    my_file.write(approx.code)
-    np.save(file_path + "_run_vector", approx.run_vector)
-    my_file.close()
+        queue.finish()
 
+        tree = np.array(approx.tree_1d)
+        print(tree)
+        print(tree.shape)
 
-# loads a new approximator class with the variables saved at the file path
-def load_from_file(file_path):
-    my_file = open(file_path + ".txt", "r")
-    # code is just on first line of file, so get this then run it
-    approx = Approximator()
-    approx.code = my_file.read()
-    print(approx.code)
-    approx.run_vector = np.load(file_path + "_run_vector.npy")
-    my_file.close()
-    return approx
+        x_dev = cl_array.to_device(queue, x)
+        tree_dev = cl_array.to_device(queue, tree)
+        y_dev = cl_array.empty_like(x_dev)
+
+        # build the code to run from given string
+        declaration = "__kernel void sum(__global double *tree, "
+        declaration += "__global double *x, __global double *y) "
+        code = declaration + '{' + approx.code + '}'
+
+        prg = cl.Program(ctx, code).build()
+        # second parameter determines how many 'code instances' to make, (1, ) is 1
+        # should be x_dev.shape
+        prg.sum(queue, x_dev.shape, None, tree_dev.data,
+                x_dev.data, y_dev.data)
+
+        queue.finish()
+
+        return y_dev.get()
+    else:
+        raise ValueError("Function requires pyopencl installation.")
+
 

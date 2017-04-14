@@ -7,11 +7,7 @@ import numpy as np
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
 import adaptive_interpolation.generate as generate
-try:
-    with_pickle = True
-    import pickle
-except:
-    with_pickle = False
+
 
 
 # takes an interval from a to b, a function, an interpolant order, and a
@@ -84,25 +80,31 @@ def generate_code(approx, branching=0, vectorized=1, domain_size=None):
     return code
 
 
-# save approximator class to the given path
-def save_approximation(path_name, approximation):
-    if with_pickle:
-        my_file = open(path_name, "w")
-        pickle.dump(approximation, my_file)
-        my_file.close()
-    else:
-        raise Exception("Save requires pickle module be installed")
+# use to save the approximator class for later use
+def write_to_file(file_path, approx):
+    cd_file = open(file_path + "_code.txt", "w")
+    bs_file = open(file_path + "_basis.txt", "w")
+    cd_file.write(approx.code)
+    bs_file.write(approx.basis)
+    np.save(file_path + "_run_vector", approx.run_vector)
+    cd_file.close()
+    bs_file.close()
 
-
-# load approximator class from the given path
-def get_saved_approximation(path_name):
-    if with_pickle:
-        my_file = open(path_name, "r")
-        app = pickle.load(my_file)
-        my_file.close()
-        return app
-    else:
-        raise Exception("Load requires pickle module be installed")
+# loads a new approximator class with the variables saved at the file path
+def load_from_file(file_path):
+    try:
+        cd_file = open(file_path + "_code.txt", "r")
+        bs_file = open(file_path + "_basis.txt", "r")
+        approx = Approximator()
+        approx.code = cd_file.read()
+        approx.basis = bs_file.read()
+        approx.run_vector = np.load(file_path + "_run_vector.npy")
+        cd_file.close()
+        bs_file.close()
+        return approx
+    except:
+        str_err = "Specified file {0}, does not exist".format(file_path)
+        raise Exception(str_err)
 
 
 # code is a string of C code to be evaluated. x is a numpy array

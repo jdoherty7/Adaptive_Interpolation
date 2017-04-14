@@ -75,7 +75,7 @@ def my_plot(x, actual, approximation, abs_errors, allowed_error, ap):
         all_ranges.append(my_range[1])
     for val in list(set(all_ranges)):
         plt.axvline(x=val)
-    c, = plt.plot(ap.used_midpoints, ap.rel_errors, 'bs', label='Relative Errors')
+    c, = plt.plot(ap.used_midpoints, ap.used_errors, 'bs', label='Relative Errors')
     plt.legend(handles=[a, b, c], loc=0, fontsize='small')
     plt.show()
 
@@ -91,18 +91,19 @@ def demo_adapt(function, order, allowed_error, basis,
                             allowed_error, basis, adapt_type, accurate)
 
     print("\nGenerated Code:\n")
-    code = adapt_i.generate_code(my_approx)
-    print(code)
+    adapt_i.generate_code(my_approx,0,1)
+    print(my_approx.code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 1e4, dtype=np.float64)
+    x = np.linspace(a, b, 1e3, dtype=np.float64)
     if with_pyopencl: 
-        est = adapt_i.run_code(x, my_approx)
+        est = adapt_i.run_code(x, my_approx, vectorized=True)
     else: 
         est = my_approx.evaluate(x)
     print("Evaluating Function")
     true = function(x)
     print("Plotting")
-    if animate:
+    #not working with tree version
+    if animate and False:
         fig = plt.figure()
         ax1 = fig.add_subplot(1,2,2)
         ax2 = fig.add_subplot(1,2,1)
@@ -135,13 +136,13 @@ def demo_adapt(function, order, allowed_error, basis,
                         anim = False
                 # only animate if unique leaf
                 if anim:
-                    a0, b0 = my_approx.heap[k][3][0], my_approx.heap[k][3][1]
+                    a0, b0 = my_approx.heap[k][2][0], my_approx.heap[k][2][1]
                     t = np.linspace(a0, b0, 1e3)
                     coeff = my_approx.heap[k][1]
                     y = []
                     for l in range(len(t)):
                         ys = my_approx.basis_function(t[l], len(coeff)-1, 
-                                                my_approx.heap[k][2], a0, b0)
+                                                my_approx.basis, a0, b0)
                         ys = np.dot(coeff, ys)
                         y.append(ys)
                     er = abs(np.array(y) - function(t))
@@ -149,7 +150,7 @@ def demo_adapt(function, order, allowed_error, basis,
                     im2, = ax1.plot(t, y, 'b')
                     im3, = ax2.plot(t, er, 'g')
                     im4  = ax2.axvline(x=a0)
-                    im5, = ax2.plot(my_approx.heap[k][0], my_approx.heap[k][4], 'bs')
+                    im5, = ax2.plot(my_approx.heap[k][0], my_approx.heap[k][3], 'bs')
                     #ims[i].append(im1)
                     ims[i].append(im2)
                     ims[i].append(im3)
@@ -179,11 +180,11 @@ def main_demo():
     demo_adapt(my_f, 20, 1e-10, 'chebyshev', a=.01, b=1)
     # variable order interpolation method
     print("\nA piecewise function")
-    demo_adapt(f1, 6, 1e-4, 'chebyshev', 'Variable')
+    demo_adapt(f1, 6, 1e-4, 'monomial', 'Variable')
 
 
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f1, 5, 2e-1, 'chebyshev', animate=True, b=10)
+    demo_adapt(f, 3, 1e-2, 'chebyshev', animate=False, b=10)
 

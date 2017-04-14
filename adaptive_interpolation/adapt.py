@@ -8,12 +8,33 @@ import numpy as np
 import numpy.linalg as la
 
 
-class Interpolant(object):
+class Tree:
+    def __init__(self, root=0):
+        self.root = root
+        self.size = 0
+        self.max_level = 0
 
+
+class Node:
+    def __init__(self, parent, left=0, right=0):
+        self.parent = parent
+        self.left = left
+        self.right = right
+        self.level = self.get_level()
+        self.data = 0
+
+    def get_level(self):
+        if (self.parent == 0):
+            return 0
+        else:
+            return self.parent.level + 1
+
+
+class Interpolant(object):
     # defining parameters of an adaptive method
     def __init__(self, f, order, error, interpolant_choice, 
                  guaranteed_accurate=True):
-        if error <= 1e-16:
+        if error <= 2e-16:
             string_err = "This package currently uses doubles thus an error"
             string_err+= "tolerance of less than 1e-16 is not possible."
             raise ValueError(string_err)
@@ -21,7 +42,8 @@ class Interpolant(object):
         my_bool = my_bool and interpolant_choice != 'legendre'
         my_bool = my_bool and interpolant_choice != 'monomial'
         if my_bool:
-            string_err = "{0} is not a valid interpolant.\n".format(interpolant_choice)
+            string_err = "{0} is not a valid \
+                          interpolant.\n".format(interpolant_choice)
             string_err+= "legendre, chebyshev, and monomial are the choices."
             raise ValueError(string_err)
         # function pass, must be vectorized
@@ -30,31 +52,15 @@ class Interpolant(object):
         self.upper_bound = 0
         # max number of recursion levels allowed for adaption
         # 34 reaches a spacing of 10**-15
-        self.max_recur = 25
+        self.max_recur = 30
         # max order allwed to create interpolation
         self.max_order = order
         # string specifying basis choice
         self.basis = interpolant_choice
-        self.heap = [0, 0]
+        self.tree = Tree(Node(0))
+        self.tree.size+=1
         self.allowed_error = error
         self.guaranteed_accurate = guaranteed_accurate
-
-    # Equate every empty child with its parent so that the tree is full
-    # // rounds down to obtain parent node
-    def make_full_tree(self):
-        for i in range(len(self.heap)):
-            if self.heap[i] == 0:
-                self.heap[i] = self.heap[i//2]
-
-    # function to add data to the heap, if data being added is larger
-    # than the current size of the heap then double its size (adds new level)
-    def add_to_heap(self, data, index):
-        if index < 1:
-            raise ValueError("Error, heap index must be > 0")
-        elif len(self.heap) <= index:
-            for i in range(len(self.heap)):
-                self.heap.append(0)
-        self.heap[index] = data
 
     # function to evaluate Legendre polynomials of a number, x, up to order n
     def legendre(self, n, x):
@@ -95,7 +101,7 @@ class Interpolant(object):
         elif (basis == 'chebyshev'):
             return self.chebyshev(n, self.transform(x, a, b))
         else:
-            return np.array([x**i for i in range(int(order)+1)], dtype=np.float64)
+            return np.array([x**i for i in range(int(n)+1)], dtype=np.float64)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array
@@ -115,8 +121,7 @@ class Interpolant(object):
         k = np.array(range(1, int(n) + 1)[::-1], dtype=np.float64)
         nodes = np.cos((2.*k - 2.)*np.pi/(2.*int(n-1)))
         # change range from -1 to 1 to a to b
-        nodes = (b-a)*.5*(nodes + 1.) + a
-        return nodes
+        return (b-a)*.5*(nodes + 1.) + a
 
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
@@ -128,28 +133,15 @@ class Interpolant(object):
         # try to solve for coefficients, if there is a singular matrix
         # or some other error then return [0] to indicate an error
         try: return la.solve(V, self.function(nodes))
-        except: return [0]
-
-    # find the error of given coefficients on interval a, b
-    # with a given order an basis. Finds the relative error
-    # using the infinity norm
-    def find_error(self, coeff, a, b, order):
-        # check 1000 points per unit. This should give an error,
-        # relatively stable so long as dominant features are not
-        # smaller than this resolution
-        num_points = max(abs(b-a)*1000, self.max_order*100)
-        eval_points = np.linspace(a, b, max(abs(b-a)*1e2, 1e2), dtype=np.float64)
-        actual = self.function(eval_points)
-        approx = self.eval_coeff(coeff, eval_points, self.basis, order, a, b)
-        # find maximum relative error in the given interval
-        rel_error = la.norm(actual - approx, np.inf)/la.norm(actual, np.inf)
-        return rel_error
+        except: return None
 
     # finds error using the max val as the max on the entire interval, not the current
     # below is the max number of points that can be evaluated exactly
     #(self.upper_bound - self.lower_bound)*(2**(self.max_recur+1))
     def find_error_new(self, coeff, a, b, order):
-        n = min(5e3, int((b-a)/self.allowed_error)+1)
+        #n = max(1e6, int((b-a)/self.allowed_error)+1)
+        #n = min(5e3, n)
+        n = 1e3
         lb, ub = self.lower_bound, self.upper_bound
         num_nodes = 100*(ub - lb)
         full_x = np.linspace(lb, ub, num_nodes, dtype=np.float64)
@@ -162,10 +154,11 @@ class Interpolant(object):
 
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
-    def adapt(self, a, b, index):
+    def adapt(self, a, b, node):
+        self.tree.max_level = max(self.tree.max_level, node.level)
         # prevent from refining the interval too greatly
         # allow only 20 levels of refinement
-        if (index >= 2**(self.max_recur+1)):
+        if (node.level >= 2**(self.max_recur+1)):
             string_err0 = "Recursed too far. Try changing the order of\n"
             string_err0+= "the interpolant used, raise the allowed error,\n"
             string_err0+= "or set accurate=False.\n"
@@ -177,10 +170,8 @@ class Interpolant(object):
         nodes = self.get_cheb(a, b, self.max_order+1)
         # get coefficients of interpolant defined on the nodes
         # guaranteed to never give a singular matrix
-        temp = self.interpolate(nodes, self.basis, a, b)
-        if temp[0] != 0:
-            coeff = temp
-        else:
+        coeff = self.interpolate(nodes, self.basis, a, b)
+        if coeff is None:
             string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
             string_err1+= "If using monomials try using an orthogonal polynomial.\n"
             string_err1+= "Otherwise, try a different order interpolant, lower the\n"
@@ -194,20 +185,31 @@ class Interpolant(object):
         this_error = self.find_error_new(coeff, a, b, self.max_order)
         # append the coefficients and the range they are valid on to this
         # array also the basis function and order of in this range
-        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
+        node.data = [(a+b)/2., coeff, [a, b], this_error]
         # if error is larger than maximum allowed relative error
         # then refine the interval
         if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
-            self.adapt(a, (a+b)/2., 2*index)
-            self.adapt((a+b)/2., b, 2*index+1)
-        else: # use remez on last bound to get extra accuracy
-            self.remez_adapt(a, (a+b)/2., 2*index)
-            self.remez_adapt((a+b)/2., b, 2*index+1)
+            self.tree.size += 2
+            node.left = Node(node)
+            node.right = Node(node)
+            self.adapt(a, (a+b)/2., node.left)
+            self.adapt((a+b)/2., b, node.right)
+        """
+        elif (this_error > self.allowed_error): 
+            # use remez on last bound to get extra accuracy
+            self.tree.size += 2
+            node.left = Node(node)
+            node.right = Node(node)
+            self.remez_adapt(a, (a+b)/2., node.left)
+            self.remez_adapt((a+b)/2., b, node.right)
+        """
+
 
     # adaptive method finding an interpolant for a function
     # this checks multiple orders to make an interpolant
     def variable_order_adapt(self, a, b, index):
+        self.tree.max_level = max(self.tree.max_level, node.level)
         # recursed too far, 15 levels down
         if (index >= 2**(self.max_recur+1)): 
             string_err0 = "Recursed too far. Try changing the order\n"
@@ -226,21 +228,25 @@ class Interpolant(object):
             nodes = self.get_cheb(a, b, curr_order+1)
             curr_coeff = self.interpolate(nodes, self.basis, a, b)
             # if you get a singular matrix, break the for loop
-            if curr_coeff[0] == 0: break
+            if curr_coeff is None: break
             error = self.find_error_new(curr_coeff, a, b, curr_order)
             if error < min_error:
                 coeff = curr_coeff
                 min_error = error
         # need to check that all these variables are actually assigned
-        if coeff[0] == 0: return
+        if coeff is None: return
         # turn into max_order interpolant so it can run using
         # same generative code
         padded = np.zeros((int(self.max_order)+1,))
         padded[:coeff.shape[0]] = coeff
-        self.add_to_heap([(a+b)/2., padded, self.basis, [a, b], min_error], index)
-        if (min_error > self.allowed_error):
+        self.add_to_heap([(a+b)/2., padded, [a, b], min_error], index)
+        if (min_error > 4*self.allowed_error):
             self.variable_order_adapt(a, (a+b)/2., 2*index)
             self.variable_order_adapt((a+b)/2., b, 2*index + 1)
+        elif (this_error > self.allowed_error): 
+            # use remez on last bound to get extra accuracy
+            self.remez_adapt(a, (a+b)/2., 2*index)
+            self.remez_adapt((a+b)/2., b, 2*index+1)
 
 
     ########################################################
@@ -248,7 +254,6 @@ class Interpolant(object):
     # Section Containing Functions for Remez interpolation #
     #                                                      #
     ########################################################
-
 
     # find interpolated coefficients given a basis for
     # evaluation and nodes to evaluate the function at.
@@ -283,10 +288,10 @@ class Interpolant(object):
 
     def check_eq_alt(self, array, error):
         tolerance = 1e-15
-        the_sum = abs(np.sum(array))
-        diff = abs(the_sum - abs(error))
+        the_sum = np.abs(np.sum(array))
+        diff = np.abs(the_sum - np.abs(error))
         alternate = min(diff, the_sum)
-        equal = abs(abs(array[0]) - error)
+        equal = np.abs(np.abs(array[0]) - error)
         if alternate <= tolerance and equal <=tolerance:
             return True
         else:
@@ -295,12 +300,11 @@ class Interpolant(object):
     def remez(self, a, b, n):
         remez_nodes = self.get_cheb(a, b, n+2)
         x = np.linspace(a, b, min(5e3, (b-a)/self.allowed_error))
-        #while (1):
         for _ in range(20):
             solution = self.solve_remez_system(remez_nodes, n, a, b)
             if solution is None: return solution # singular matrix
             coeff = solution[:-1]
-            error = abs(solution[-1])
+            error = np.abs(solution[-1])
             M = self.update_nodes(remez_nodes, coeff, n, a, b)
             err = lambda x: self.eval_coeff(coeff, x, self.basis, n,
                                             a, b) - self.function(x)
@@ -313,7 +317,8 @@ class Interpolant(object):
 
 
     # adaptive method utilizing the remez algorithm for interpolation
-    def remez_adapt(self, a, b, index):
+    def remez_adapt(self, a, b, node):
+        self.tree.max_level = max(self.tree.max_level, node.level)
         if (index >= 2**(self.max_recur+1)):
             string_err0 = "Recursed too far. Try changing the order of\n"
             string_err0+= "the interpolant used, raise the allowed error,\n"
@@ -323,25 +328,26 @@ class Interpolant(object):
             else:
                 return
         # get coeff on interval utilizing the remez algorithm
-        temp, M = self.remez(a, b, self.max_order)
-        if temp is not None:
-            coeff = temp
-        elif self.guaranteed_accurate:
-            string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
-            string_err1+= "If using monomials try using an orthogonal polynomial.\n"
-            string_err1+= "Otherwise, try a different order interpolant, lower the\n"
-            string_err1+= "allowed error, or set accurate=False\n"
-            raise ValueError(string_err1)
-        else:
-            return
+        coeff, M = self.remez(a, b, self.max_order)
+        if coeff is None:
+            if self.guaranteed_accurate:
+                string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
+                string_err1+= "If using monomials try using an orthogonal polynomial.\n"
+                string_err1+= "Otherwise, try a different order interpolant, lower the\n"
+                string_err1+= "allowed error, or set accurate=False\n"
+                raise ValueError(string_err1)
+            else:
+                return
         this_error = self.find_error_new(coeff, a, b, self.max_order)
-        self.add_to_heap([(a+b)/2., coeff, self.basis, [a, b], this_error], index)
-        #if (this_error > self.allowed_error):
+        node.data = [(a+b)/2., coeff, [a, b], this_error]
+        if (this_error > self.allowed_error):
             # adapt on the left subinterval then the right subinterval
-            #self.remez_adapt(a, (a+b)/2., 2*index)
-            #self.remez_adapt((a+b)/2., b, 2*index+1)
-            #self.adapt(a, M[int(len(M)/2)], 2*index)
-            #self.adapt(M[int(len(M)/2)], b, 2*index+1)
+            self.tree.size += 2
+            node.left = Node(node)
+            node.right = Node(node)
+            self.remez_adapt(a, (a+b)/2., node.left)
+            self.remez_adapt((a+b)/2., b, node.right)
+
 
     # Method to run the adaptive method initially
     def run_adapt(self, lower_bound, upper_bound, adapt_type):
@@ -354,6 +360,6 @@ class Interpolant(object):
         elif adapt_type.lower() == "remez":
             self.remez_adapt(lower_bound, upper_bound, 1)
         else:
-            self.adapt(lower_bound, upper_bound, 1)
-        self.make_full_tree()
+            self.adapt(lower_bound, upper_bound, self.tree.root)
+
 
