@@ -29,8 +29,6 @@ class Approximator(object):
             self.code = 0
             self.midpoints = []
             self.used_midpoints = []
-            #self.ranges0 = []
-            #self.ranges1 = []
             self.rel_errors = []
             self.used_errors = []
             self.ranges = []
@@ -41,12 +39,12 @@ class Approximator(object):
             self.tree_vector = [0] * (self.tree.size)
             self.make_tree_array(self.tree.root)
             self.convert_to_arrays(self.tree.root)
-            print("=======TREE VECTOR======")
-            for node in self.tree_vector:
-                print(node)
-            print("========================")
-            self.tree_1d = self.tree_1d()
-            print(self.tree_1d)
+            #print("=======TREE VECTOR======")
+            #for node in self.tree_vector:
+                #print(node)
+            #print("========================")
+            self.tree_1d = np.array(self.tree_1d())
+            #print(self.tree_1d)
 
 
     def tree_1d(self):
@@ -62,7 +60,7 @@ class Approximator(object):
                             for k in range(len(node[i][j])):
                                 tree_1d.append(node[i][j][k])
                         elif j != 3: #dont add error into struct
-                            print(node[i][j], j)
+                            #print(node[i][j], j)
                             tree_1d.append(node[i][j])
                 else:
                     tree_1d.append(node[i]*(self.max_order+6))
@@ -117,9 +115,9 @@ class Approximator(object):
             index = 0
             for i in range(1, self.num_levels):
                 if self.tree_1d[index] > xn:#midpoints
-                    index = self.tree_1d[index+4+self.max_order]
+                    index = int(self.tree_1d[index+4+self.max_order])
                 else:
-                    index = self.tree_1d[index+5+self.max_order]
+                    index = int(self.tree_1d[index+5+self.max_order])
             a = self.tree_1d[index+2+self.max_order]
             b = self.tree_1d[index+3+self.max_order]
             xs = self.basis_function(xn, self.max_order, self.basis, a, b)

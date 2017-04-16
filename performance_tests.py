@@ -191,8 +191,6 @@ def test_cheb_surf_speed():
     for _ in range(n):
         index_x=0
         for order in orders:
-            index_y = 0
-            approx = adapt_i.make_interpolant(a, b, f, order, 1e-5, "chebyshev")
             adapt_i.generate_code(approx, 0, 1)
             y = np.linspace(a, b, 1e3)
             print("rel_error", la.norm(approx.old_evaluate(y)-f(y),np.inf)/la.norm(f(y), np.inf))
@@ -220,55 +218,58 @@ def test_cheb_surf_speed():
 
 def test_speed():
     os.system("PYOPENCL_CTX=''")
-    n, m = 1, 4
-    a, b = 0, 50
-    sizes = np.arange(5, 12)
+    n = 5
+    a, b = 0, 20
+    sizes = np.arange(5, 19)
     tests = []
     orders = [8, 16, 32]
 
     tests.append(0*np.ones(sizes.shape))
     for j in range(len(orders)):
         tests.append(0*np.ones(sizes.shape))
-        for trial in range(n):
-            approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-3, 'chebyshev')
-            adapt_i.generate_code(approx, 0, 1)
-            y = np.linspace(a, b, 5e4)
-            z = adapt_i.run_code(y, approx, vectorized=True)
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-10, 'chebyshev')
+        adapt_i.generate_code(approx, 0, 1)
+        y = np.linspace(a, b, 5e1)
+        z = adapt_i.run_code(y, approx, vectorized=True)
+        if True:
+            print(approx.code)
+            print(z)
             plt.figure()
             plt.plot(y, f(y), 'r')
             plt.plot(y, z, 'b')
+            plt.figure()
+            plt.yscale("log")
+            plt.plot(y, abs(z-y), 'g')
             plt.show()
             rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
-            print("rel_error",orders[j],rel_err) #check its <1e-14
-            for _ in range(m):
-                index = 0
-                for i in sizes:
-                    x = np.linspace(a, b, 2**i)
+        print("rel_error",orders[j],rel_err) #check its <1e-14
+        for trial in range(n):
+            index = 0
+            for i in sizes:
+                x = np.linspace(a, b, 2**i)
+                start_time = time.time()
+                val = adapt_i.run_code(x, approx, vectorized=True)
+                run_time = time.time() - start_time
+                # run code twice before actually adding to tests
+                if trial > 0:
+                    tests[j][index] += run_time
                     start_time = time.time()
-                    val = adapt_i.run_code(x, approx, vectorized=True)
+                    val = f(x)
                     run_time = time.time() - start_time
-                    # run code twice before actually adding to tests
-                    if trial > 0 or m >1:
-                        tests[j][index] += run_time
-                        start_time = time.time()
-                        val = f(x)
-                        run_time = time.time() - start_time
-                        tests[0][index] += run_time
-                        index+=1
+                    tests[0][index] += run_time
+                    index+=1
     # average out each test
     for i in range(len(tests)):
-        tests[i] /= (n*m - 2)
-
-
+        tests[i] /= (n - 1)
     plt.figure()
     plt.title("Runtimes of 10th order 10**-14 precision from 0-500, bessel")
     plt.xlabel("Size of evaluated array (2**x elements)")
     plt.ylabel("Time to evaluate (seconds)")
-    a1, = plt.plot(sizes, tests[1], 'bs', label='16th order approx')
-    sp, = plt.plot(sizes, tests[0], 'rs', label='scipy bessel')
-    a2, = plt.plot(sizes, tests[2], 'gs', label='32nd order approx')
-    a3, = plt.plot(sizes, tests[3], 'ys', label='64th order approx')
-    plt.legend(handles = [a1, a2, a3, sp])
+    a1, = plt.plot(sizes, tests[1], 'bs', label='8th order approx')
+    #sp, = plt.plot(sizes, tests[0], 'rs', label='scipy bessel')
+    a2, = plt.plot(sizes, tests[2], 'gs', label='16th order approx')
+    a3, = plt.plot(sizes, tests[3], 'ys', label='32nd order approx')
+    plt.legend(handles = [a1, a2, a3])
     plt.show()
 
 
