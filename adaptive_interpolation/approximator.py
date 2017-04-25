@@ -38,14 +38,12 @@ class Approximator(object):
             self.num_levels = self.tree.max_level+1
             self.tree_vector = [0] * (self.tree.size)
             self.make_tree_array(self.tree.root)
-            self.convert_to_arrays(self.tree.root)
+            #self.convert_to_arrays(self.tree.root)
             #print("=======TREE VECTOR======")
             #for node in self.tree_vector:
                 #print(node)
             #print("========================")
             self.tree_1d = np.array(self.tree_1d())
-            #print(self.tree_1d)
-
 
     def tree_1d(self):
         tree_1d = []
@@ -93,10 +91,11 @@ class Approximator(object):
         return my_index
 
 
-    def evaluate_tree(self, x, levels=-1):
+    def evaluate_tree(self, x, levels=-1, extra=-1):
         if levels==-1:
             levels = self.num_levels
         y = []
+        dat = []
         for xn in x:
             node = self.tree.root
             for _ in range(1, int(levels)):
@@ -107,7 +106,16 @@ class Approximator(object):
             xs = self.basis_function(xn, self.max_order, self.basis,
                                      node.data[2][0], node.data[2][1])
             y.append(np.dot(node.data[1], xs))
-        return y
+            if extra != -1:
+                if len(dat) > 0:
+                    if dat[-1] != node.data:
+                        dat.append(node.data)
+                else:
+                    dat.append(node.data)
+        if extra != -1:
+            return y, dat
+        else:  
+            return y
 
     def evaluate(self, x):
         y = []

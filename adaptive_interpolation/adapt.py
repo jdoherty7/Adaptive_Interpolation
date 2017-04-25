@@ -52,7 +52,7 @@ class Interpolant(object):
         self.upper_bound = 0
         # max number of recursion levels allowed for adaption
         # 34 reaches a spacing of 10**-15
-        self.max_recur = 30
+        self.max_recur = 32
         # max order allwed to create interpolation
         self.max_order = order
         # string specifying basis choice
@@ -158,7 +158,7 @@ class Interpolant(object):
         self.tree.max_level = max(self.tree.max_level, node.level)
         # prevent from refining the interval too greatly
         # allow only 20 levels of refinement
-        if (node.level >= 2**(self.max_recur+1)):
+        if (node.level >= self.max_recur):
             string_err0 = "Recursed too far. Try changing the order of\n"
             string_err0+= "the interpolant used, raise the allowed error,\n"
             string_err0+= "or set accurate=False.\n"
@@ -188,14 +188,13 @@ class Interpolant(object):
         node.data = [(a+b)/2., coeff, [a, b], this_error]
         # if error is larger than maximum allowed relative error
         # then refine the interval
-        if (this_error > self.allowed_error):
+        if (this_error > 4*self.allowed_error):
             # adapt on the left subinterval then the right subinterval
             self.tree.size += 2
             node.left = Node(node)
             node.right = Node(node)
             self.adapt(a, (a+b)/2., node.left)
             self.adapt((a+b)/2., b, node.right)
-        """
         elif (this_error > self.allowed_error): 
             # use remez on last bound to get extra accuracy
             self.tree.size += 2
@@ -203,7 +202,7 @@ class Interpolant(object):
             node.right = Node(node)
             self.remez_adapt(a, (a+b)/2., node.left)
             self.remez_adapt((a+b)/2., b, node.right)
-        """
+
 
 
     # adaptive method finding an interpolant for a function
@@ -211,7 +210,7 @@ class Interpolant(object):
     def variable_order_adapt(self, a, b, index):
         self.tree.max_level = max(self.tree.max_level, node.level)
         # recursed too far, 15 levels down
-        if (index >= 2**(self.max_recur+1)): 
+        if (node.level >= self.max_recur): 
             string_err0 = "Recursed too far. Try changing the order\n"
             string_err0+= "of the interpolant used, raise the allowed error,\n"
             string_err0+= "or set accurate=False."
@@ -239,14 +238,22 @@ class Interpolant(object):
         # same generative code
         padded = np.zeros((int(self.max_order)+1,))
         padded[:coeff.shape[0]] = coeff
-        self.add_to_heap([(a+b)/2., padded, [a, b], min_error], index)
-        if (min_error > 4*self.allowed_error):
-            self.variable_order_adapt(a, (a+b)/2., 2*index)
-            self.variable_order_adapt((a+b)/2., b, 2*index + 1)
+        node.data = [(a+b)/2., padded, [a, b], min_error]
+        if (this_error > 4*self.allowed_error):
+            # adapt on the left subinterval then the right subinterval
+            self.tree.size += 2
+            node.left = Node(node)
+            node.right = Node(node)
+            self.variable_order_adapt(a, (a+b)/2., node.left)
+            self.variable_order_adapt((a+b)/2., b, node.right)
         elif (this_error > self.allowed_error): 
             # use remez on last bound to get extra accuracy
-            self.remez_adapt(a, (a+b)/2., 2*index)
-            self.remez_adapt((a+b)/2., b, 2*index+1)
+            self.tree.size += 2
+            node.left = Node(node)
+            node.right = Node(node)
+            self.remez_adapt(a, (a+b)/2., node.left)
+            self.remez_adapt((a+b)/2., b, node.right)
+
 
 
     ########################################################
@@ -319,7 +326,7 @@ class Interpolant(object):
     # adaptive method utilizing the remez algorithm for interpolation
     def remez_adapt(self, a, b, node):
         self.tree.max_level = max(self.tree.max_level, node.level)
-        if (index >= 2**(self.max_recur+1)):
+        if (node.level >= self.max_recur):
             string_err0 = "Recursed too far. Try changing the order of\n"
             string_err0+= "the interpolant used, raise the allowed error,\n"
             string_err0+= "or set accurate=False.\n"

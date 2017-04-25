@@ -12,7 +12,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
-
+import time
 import cgen as c
 import numpy as np
 try:
@@ -181,7 +181,7 @@ def gen_cheb_v(ap):
     # rescale variables
     string += "a = tree[index+{0}];\n".format(2+order)
     string += "b = tree[index+{0}];\n".format(3+order)
-    string += "x[n] = (2/(b - a))*(x[n] - a) - 1.0;\n"
+    string += "x[n] = (2./(b - a))*(x[n] - a) - 1.0;\n"
     string += "T0 = 1.0;\n"
     if order > 0:
         string += "T1 = x[n];\n"
@@ -371,7 +371,9 @@ def run_ortho_vec(x, approx):
         prg = cl.Program(ctx, code).build()
         # second parameter determines how many 'code instances' to make, (1, ) is 1
         # should be x_dev.shape
-        prg.sum(queue, x_dev.shape, None, tree_dev.data,
+        knl = prg.sum
+        
+        knl(queue, x_dev.shape, None, tree_dev.data,
                 x_dev.data, y_dev.data)
 
         queue.finish()
@@ -379,5 +381,88 @@ def run_ortho_vec(x, approx):
         return y_dev.get()
     else:
         raise ValueError("Function requires pyopencl installation.")
+
+
+
+
+
+########################################
+#                                      #
+#    USED FOR TESTING PERFORMANCE      #
+#                                      #
+########################################
+
+# string is executable c code
+# x is the co-image of function
+def build_test(x, approx):
+    ctx = cl.create_some_context()
+    queue = cl.CommandQueue(ctx)
+
+    queue.finish()
+
+    tree = approx.tree_1d
+
+    x_dev = cl_array.to_device(queue, x)
+    tree_dev = cl_array.to_device(queue, tree)
+    y_dev = cl_array.empty_like(x_dev)
+
+    # build the code to run from given string
+    declaration = "__kernel void sum(__global double *tree, "
+    declaration += "__global double *x, __global double *y) "
+    code = declaration + '{' + approx.code + '}'
+
+    prg = cl.Program(ctx, code).build()
+    # second parameter determines how many 'code instances' to make, (1, ) is 1
+    # should be x_dev.shape
+    knl = prg.sum
+    queue.finish()
+    return knl, queue, x_dev, y_dev, tree_dev
+
+def run_test(knl, queue, x, y, tree):
+    queue.finish()
+    start = time.time()
+    knl(queue, (8,), (8,), tree.data, x.data, y.data)
+    queue.finish()
+    return time.time() - start, y.get()
+ 
+
+# generate C code that evaluates chebyshev polynomials
+# according to the approximator class that is given.
+def gen_test(ap, size):
+    # maximum possible order of representation
+    order = int(ap.max_order)
+    string = "for (int n=get_global_id(0); n<"+repr(int(size))+";n+=8){"
+    #string += "int n = get_global_id(0);\n"
+    # gives the index of the coefficients to use
+    string += "int index = 0;\n"
+    string += "double T0=0;\ndouble T1=0;\ndouble Tn=0;\n"
+    string += "double a=0;\ndouble b=0;\ndouble s=0;\ndouble x_scaled;\n"
+    string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
+    string += "{\n\tindex = tree[index] > x[n] ? "
+    string += "(int)tree[index+{0}] : ".format(4+order)
+    string += "(int)tree[index+{0}];\n".format(5+order)
+    string += "} \n"
+    # rescale variables
+    string += "a = tree[index+{0}];\n".format(2+order)
+    string += "b = tree[index+{0}];\n".format(3+order)
+    string += "x_scaled = (2./(b - a))*(x[n] - a) - 1.0;\n"
+    string += "T0 = 1.0;\n"
+    if order > 0:
+        string += "T1 = x_scaled;\n"
+    # initialize the sum
+    string += "s = tree[index+1]*T0;\n"
+    if order > 0:
+        string += "s = s + tree[index+2]*T1;\n"
+    if order > 1:
+        # calculate order 2 through n
+        string += "for (int j = 3; j <=" + repr(order+1) + "; j++) {\n"
+        string += "\tTn = 2*x_scaled*T1 - T0;\n"
+        string += "\ts = s + tree[index + j]*Tn;\n"
+        string += "\tT0 = T1;\n"
+        string += "\tT1 = Tn;\n"
+        string += "}\n"
+    string += "y[n] = s;\n}\n"
+    ap.code = string
+    return string
 
 

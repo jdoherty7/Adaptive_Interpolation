@@ -103,7 +103,7 @@ def demo_adapt(function, order, allowed_error, basis,
     true = function(x)
     print("Plotting")
     #not working with tree version
-    if animate and False:
+    if animate:
         fig = plt.figure()
         ax1 = fig.add_subplot(1,2,2)
         ax2 = fig.add_subplot(1,2,1)
@@ -124,39 +124,27 @@ def demo_adapt(function, order, allowed_error, basis,
             ax2.set_title("Relative and Absolute Errors on Intervals")
             ims[i].append(im0)
             ims[i].append(rel)
-            curr_level_size = 2**i
-            for j in range(curr_level_size):
-                k = curr_level_size + j
-                if j==curr_level_size-1:
-                    anim = True
-                else:
-                    if my_approx.heap[k][0] != my_approx.heap[k+1][0]:
-                        anim = True
-                    else:
-                        anim = False
-                # only animate if unique leaf
-                if anim:
-                    a0, b0 = my_approx.heap[k][2][0], my_approx.heap[k][2][1]
-                    t = np.linspace(a0, b0, 1e3)
-                    coeff = my_approx.heap[k][1]
-                    y = []
-                    for l in range(len(t)):
-                        ys = my_approx.basis_function(t[l], len(coeff)-1, 
-                                                my_approx.basis, a0, b0)
-                        ys = np.dot(coeff, ys)
-                        y.append(ys)
-                    er = abs(np.array(y) - function(t))
-                    #im1  = ax1.axvline(x=a0)
-                    im2, = ax1.plot(t, y, 'b')
-                    im3, = ax2.plot(t, er, 'g')
-                    im4  = ax2.axvline(x=a0)
-                    im5, = ax2.plot(my_approx.heap[k][0], my_approx.heap[k][3], 'bs')
-                    #ims[i].append(im1)
-                    ims[i].append(im2)
-                    ims[i].append(im3)
-                    ims[i].append(im4)
-                    ims[i].append(im5)
-            im6 = ax2.axvline(x=b0)
+            
+            
+            t = np.linspace(a, b, 1e5)
+            y, data = my_approx.evaluate_tree(t, i+1, 1)
+            midpoints = [elem[0] for elem in data]
+            ranges = [elem[2] for elem in data]
+            rel_errors = [elem[3] for elem in data]
+
+            er = abs(np.array(y) - function(t))
+
+            im2, = ax1.plot(t, y, 'b')
+            im3, = ax2.plot(t, er, 'g')
+            for r in ranges:
+                im4  = ax2.axvline(x=r[0])
+                ims[i].append(im4)
+            im5, = ax2.plot(midpoints, rel_errors, 'bs')
+            ims[i].append(im2)
+            ims[i].append(im3)
+            ims[i].append(im5)
+
+            im6 = ax2.axvline(x=ranges[-1][1])
             ims[i].append(im6)
         ani = animation.ArtistAnimation(fig, ims, interval=1000)
         ani.save("adapt.mp4")
@@ -186,5 +174,5 @@ def main_demo():
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f, 3, 1e-2, 'chebyshev', animate=False, b=10)
+    demo_adapt(f1, 7, 1e-5, 'chebyshev', accurate=False, animate=True, b=10)
 

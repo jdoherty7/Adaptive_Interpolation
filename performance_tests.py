@@ -161,7 +161,7 @@ def test_guaranteed_accuracy():
     for func in [func4, func2, func3, func1]:
         for err in [1e-3, 1e-6, 1e-9]:
             for interpolant in ["monomial", "chebyshev", "legendre"]:
-                est = adapt_i.make_interpolant(a,b,func,6,err, interpolant).old_evaluate(x)
+                est = adapt_i.make_interpolant(a,b,func,6,err, interpolant).evaluate(x)
                 abs_err = la.norm(est-func(x), np.inf)
                 rel_err = abs_err/la.norm(func(x), np.inf)
                 print(interpolant, err, rel_err)
@@ -193,7 +193,7 @@ def test_cheb_surf_speed():
         for order in orders:
             adapt_i.generate_code(approx, 0, 1)
             y = np.linspace(a, b, 1e3)
-            print("rel_error", la.norm(approx.old_evaluate(y)-f(y),np.inf)/la.norm(f(y), np.inf))
+            print("rel_error", la.norm(approx.evaluate(y)-f(y),np.inf)/la.norm(f(y), np.inf))
             for i in sizes:
                 x = np.linspace(a, b, 10**i)
                 start_time = time.time()
@@ -217,59 +217,76 @@ def test_cheb_surf_speed():
 
 
 def test_speed():
-    os.system("PYOPENCL_CTX=''")
-    n = 5
+    n = 10
+    throw_out=20
     a, b = 0, 20
-    sizes = np.arange(5, 19)
+    sizes = 2**np.arange(5, 20)
+    #sizes = np.linspace(1e2, 5e6, 5, dtype=np.int)
     tests = []
-    orders = [8, 16, 32]
-
+    orders = [8, 16, 32, 64, 128]
+    tests.append(0*np.ones(sizes.shape))
+ 
     tests.append(0*np.ones(sizes.shape))
     for j in range(len(orders)):
         tests.append(0*np.ones(sizes.shape))
-        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-10, 'chebyshev')
-        adapt_i.generate_code(approx, 0, 1)
-        y = np.linspace(a, b, 5e1)
-        z = adapt_i.run_code(y, approx, vectorized=True)
-        if True:
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-14, 'chebyshev')
+        y = np.linspace(a, b, 8*5e0)
+        generate.gen_test(approx, 8*5e0)
+        knl, q, xd, yd, treed = generate.build_test(y, approx)
+        _, z = generate.run_test(knl, q, xd, yd, treed)
+        if False:
             print(approx.code)
-            print(z)
             plt.figure()
             plt.plot(y, f(y), 'r')
             plt.plot(y, z, 'b')
             plt.figure()
             plt.yscale("log")
-            plt.plot(y, abs(z-y), 'g')
+            plt.plot(y, abs(z-f(y)), 'g')
             plt.show()
-            rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
+        rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
         print("rel_error",orders[j],rel_err) #check its <1e-14
-        for trial in range(n):
+        for i in range(sizes.shape[0]):
             index = 0
-            for i in sizes:
-                x = np.linspace(a, b, 2**i)
-                start_time = time.time()
-                val = adapt_i.run_code(x, approx, vectorized=True)
-                run_time = time.time() - start_time
-                # run code twice before actually adding to tests
-                if trial > 0:
-                    tests[j][index] += run_time
+            x = np.linspace(a, b, sizes[i])
+            generate.gen_test(approx, sizes[i])
+            knl, q, xd, yd, treed = generate.build_test(x, approx)
+            for trial in range(n+throw_out):
+                print(i, "/", sizes.shape[0], "\ttrial:", trial+1, "/", n+throw_out, end="\r")
+                #knl, q, xd, yd, treed = generate.build_test(x, approx)
+                run_time, _ = generate.run_test(knl, q, xd, yd, treed)
+                #plt.figure()
+                #plt.plot(x, _, 'b')
+                #plt.show()
+                # run code multiple times before actually adding to tests
+                if trial >= throw_out:
+                    tests[j+1][i] += run_time
                     start_time = time.time()
                     val = f(x)
                     run_time = time.time() - start_time
-                    tests[0][index] += run_time
-                    index+=1
+                    #print(la.norm(_-val,np.inf)/la.norm(val, np.inf))
+                    tests[0][i] += run_time
+            print()
+
+
     # average out each test
     for i in range(len(tests)):
-        tests[i] /= (n - 1)
+        tests[i] /= float(n)
+
     plt.figure()
-    plt.title("Runtimes of 10th order 10**-14 precision from 0-500, bessel")
-    plt.xlabel("Size of evaluated array (2**x elements)")
+    plt.title("Runtimes of 10**-14 precision from 0-20, bessel, {0} trials".format(n))
+    plt.xlabel("Size of evaluated array")
     plt.ylabel("Time to evaluate (seconds)")
-    a1, = plt.plot(sizes, tests[1], 'bs', label='8th order approx')
-    #sp, = plt.plot(sizes, tests[0], 'rs', label='scipy bessel')
-    a2, = plt.plot(sizes, tests[2], 'gs', label='16th order approx')
-    a3, = plt.plot(sizes, tests[3], 'ys', label='32nd order approx')
-    plt.legend(handles = [a1, a2, a3])
+    plt.yscale("log")
+    plt.xscale("log")
+    sp, = plt.plot(sizes, tests[0], 'r', label='scipy bessel')
+    i = 0
+    hand=[sp]
+    colors = ['b', 'g', 'y', 'k', 'm', 'c']
+    for order in orders:
+        a1, = plt.plot(sizes, tests[i+1], colors[i],label="{0}th order approx".format(order))
+        i+=1
+        hand.append(a1)
+    plt.legend(handles =hand)
     plt.show()
 
 
