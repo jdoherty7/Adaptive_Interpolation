@@ -140,17 +140,21 @@ def gen_leg_b(ap, domain_size):
 # make vectorized monomial code
 # all the orders must be the same for this code
 # see remez for start of this
-def gen_mono_v(ap):
+def gen_mono(ap, size, vector_width, single=False):
     # maximum possible order of representation
-    max_or = int(ap.max_order)
-    string = "int n = get_global_id(0);\n"
+    max_or  = int(ap.max_order)
+    if single:
+        string  = "for (int n = get_local_id(0); n < " + repr(int(size))
+        string += "; i+=" + repr(int(vector_width)) + ") {\n"
+    else:
+        string  = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 1;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
     string += "(int)tree[index+{0}] :".format(4+order)
     string += "(int)tree[index+{0}];\n".format(5+order)
-    string += "} \n"
+    string += "}\n"
     string += "y[n] = "
     # the coefficients are transformed from a matrix to a vector.
     # the formula to call the correct entry is given as the indices
@@ -159,17 +163,23 @@ def gen_mono_v(ap):
         # using horner's method, this requires the for loop to be reversed
         sub_string = "x[n]*(" + sub_string + \
                      ") + tree[index + {0}]".format(j + 1)
-    string += sub_string
+    string += "" + sub_string
     string += ";\n"
+    if single:
+        string+= "}"
     return string
 
 
 # generate C code that evaluates chebyshev polynomials
 # according to the approximator class that is given.
-def gen_cheb_v(ap):
+def gen_cheb(ap, size=0, vector_width=0, single=False):
     # maximum possible order of representation
     order = int(ap.max_order)
-    string = "int n = get_global_id(0);\n"
+     if single:
+        string  = "for (int n = get_local_id(0); n < " + repr(int(size))
+        string += "; i+=" + repr(int(vector_width)) + ") {\n"
+    else:
+        string  = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 0;\n"
     string += "double T0, T1, Tn, a, b, s;\n"
@@ -198,14 +208,20 @@ def gen_cheb_v(ap):
         string += "\tT1 = Tn;\n"
         string += "}\n"
     string += "y[n] = s;\n"
+    if single:
+        string += "}"
     return string
 
 
 # generates vectorized legendre code without branching given an approximator
-def gen_leg_v(ap):
+def gen_leg(ap, size=0, vector_width=0, single=False):
     # maximum possible order of representation
     order = int(ap.max_order)
-    string = "int n = get_global_id(0);\n"
+    if single:
+        string  = "for (int n = get_local_id(0); n < " + repr(int(size))
+        string += "; i+=" + repr(int(vector_width)) + ") {\n"
+    else:
+        string  = "int n = get_global_id(0);\n" 
     # gives the index of the coefficients to use
     string += "int index = 0;\n"
     string += "double L0, L1, Ln, a, b, s;\n"
@@ -233,6 +249,8 @@ def gen_leg_v(ap):
         string += "\tL1 = Ln;\n"
         string += "}\n"
     string += "y[n] = s;\n"
+    if single:
+        string += "}"
     return string
 
 
@@ -348,15 +366,15 @@ def run_ortho_vec_old(x, approx):
     else:
         raise ValueError("Function requires pyopencl installation.")
 
+
 # string is executable c code
 # x is the co-image of function
-def run_ortho_vec(x, approx):
+def run_full_code(x, approx, size, vector_width):
     if with_pyopencl:
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
 
         queue.finish()
-
         tree = approx.tree_1d
 
         x_dev = cl_array.to_device(queue, x)
@@ -371,9 +389,8 @@ def run_ortho_vec(x, approx):
         prg = cl.Program(ctx, code).build()
         # second parameter determines how many 'code instances' to make, (1, ) is 1
         # should be x_dev.shape
-        knl = prg.sum
-        
-        knl(queue, x_dev.shape, None, tree_dev.data,
+
+        prg.sum(queue,(size,), (vector_width,), tree_dev.data,
                 x_dev.data, y_dev.data)
 
         queue.finish()
@@ -383,7 +400,41 @@ def run_ortho_vec(x, approx):
         raise ValueError("Function requires pyopencl installation.")
 
 
+# string is executable c code
+# x is the co-image of function
+def build_code(x, approx, size, vector_width):
+    if with_pyopencl:
+        ctx = cl.create_some_context()
+        queue = cl.CommandQueue(ctx)
 
+        queue.finish()
+        tree = approx.tree_1d
+
+        x_dev = cl_array.to_device(queue, x)
+        tree_dev = cl_array.to_device(queue, tree)
+        y_dev = cl_array.empty_like(x_dev)
+
+        # build the code to run from given string
+        declaration = "__kernel void sum(__global double *tree, "
+        declaration += "__global double *x, __global double *y) "
+        code = declaration + '{' + approx.code + '}'
+
+        prg = cl.Program(ctx, code).build()
+        knl = prg.sum
+        queue.finish()
+
+        return knl, queue, x, y, tree
+    else:
+        raise ValueError("Function requires pyopencl installation.")
+
+
+def run_code(knl, queue, x, y, tree, size, vector_width):
+    queue.finish()
+    start = time.time()
+    knl(queue, (int(size),), (int(vector_width),), tree.data, x.data, y.data)
+    queue.finish()
+    return time.time() - start, y.get()
+ 
 
 
 ########################################
@@ -418,20 +469,20 @@ def build_test(x, approx):
     queue.finish()
     return knl, queue, x_dev, y_dev, tree_dev
 
-def run_test(knl, queue, x, y, tree):
+def run_test(knl, queue, x, y, tree, vw):
     queue.finish()
     start = time.time()
-    knl(queue, (8,), (8,), tree.data, x.data, y.data)
+    knl(queue, (int(vw),), (int(vw),), tree.data, x.data, y.data)
     queue.finish()
     return time.time() - start, y.get()
  
 
 # generate C code that evaluates chebyshev polynomials
 # according to the approximator class that is given.
-def gen_test(ap, size):
+def gen_test(ap, size, vector_width):
     # maximum possible order of representation
     order = int(ap.max_order)
-    string = "for (int n=get_global_id(0); n<"+repr(int(size))+";n+=8){"
+    string = "for (int n=get_global_id(0); n<"+repr(int(size))+";n+="+repr(int(vector_width))+"){"
     #string += "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 0;\n"

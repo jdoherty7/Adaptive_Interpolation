@@ -217,19 +217,19 @@ def test_cheb_surf_speed():
 
 
 def test_speed():
-    n = 10
+    n = 20
     throw_out=20
     a, b = 0, 20
-    sizes = 2**np.arange(5, 20)
+    sizes = 2**np.arange(5, 18)
     #sizes = np.linspace(1e2, 5e6, 5, dtype=np.int)
     tests = []
-    orders = [8, 16, 32, 64, 128]
+    orders = [4, 5, 6, 7, 8]
     tests.append(0*np.ones(sizes.shape))
  
     tests.append(0*np.ones(sizes.shape))
     for j in range(len(orders)):
         tests.append(0*np.ones(sizes.shape))
-        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-14, 'chebyshev')
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-6, 'chebyshev')
         y = np.linspace(a, b, 8*5e0)
         generate.gen_test(approx, 8*5e0)
         knl, q, xd, yd, treed = generate.build_test(y, approx)
@@ -251,12 +251,9 @@ def test_speed():
             generate.gen_test(approx, sizes[i])
             knl, q, xd, yd, treed = generate.build_test(x, approx)
             for trial in range(n+throw_out):
-                print(i, "/", sizes.shape[0], "\ttrial:", trial+1, "/", n+throw_out, end="\r")
+                print(i+1, "/", sizes.shape[0], "\ttrial:", trial+1, "/", n+throw_out, end="\r")
                 #knl, q, xd, yd, treed = generate.build_test(x, approx)
                 run_time, _ = generate.run_test(knl, q, xd, yd, treed)
-                #plt.figure()
-                #plt.plot(x, _, 'b')
-                #plt.show()
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
                     tests[j+1][i] += run_time
@@ -273,11 +270,11 @@ def test_speed():
         tests[i] /= float(n)
 
     plt.figure()
-    plt.title("Runtimes of 10**-14 precision from 0-20, bessel, {0} trials".format(n))
+    plt.title("Runtimes 10**-6 precision from 0-20, bessel, {0} trials, vector width=4".format(n))
     plt.xlabel("Size of evaluated array")
     plt.ylabel("Time to evaluate (seconds)")
-    plt.yscale("log")
-    plt.xscale("log")
+    #plt.yscale("log")
+    #plt.xscale("log")
     sp, = plt.plot(sizes, tests[0], 'r', label='scipy bessel')
     i = 0
     hand=[sp]
@@ -290,9 +287,80 @@ def test_speed():
     plt.show()
 
 
+
+def test_throughput():
+    n = 50
+    throw_out = 40
+    a, b = 0, 20
+    precision = 1e-14
+    vws = [1, 2, 4, 8, 32, 64] # vector widths
+    size = 2**20
+    x = np.linspace(a, b, size, dtype=np.float64)
+    GB = size * 16/(8*2**20) # size times 16 bytes for each float64/GB
+    tests = []
+    orders = [9, 10, 11]
+
+    tests = [[0 for __ in range(len(vws))] for _ in range(len(orders)+ 1)]
+
+    for j in range(len(orders)):
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev')
+        # test that the error is below the desired error and function is right
+        if True:
+            y = np.linspace(a, b, 8*5e0)
+            generate.gen_test(approx, 8*5e0, vws[0])
+            knl, q, xd, yd, treed = generate.build_test(y, approx)
+            _, z = generate.run_test(knl, q, xd, yd, treed, vws[0])
+            rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
+            print("rel_error",orders[j],rel_err) #check its <1e-14
+
+        for v in range(len(vws)):
+            # see how much time to process array
+            generate.gen_test(approx, size, vws[v])
+            knl, q, xd, yd, treed = generate.build_test(x, approx)
+            for trial in range(n+throw_out):
+                print("order: ",j,"/",len(orders),"\ttrial:",trial+1,"/",n+throw_out,end="\r")
+                run_time, _ = generate.run_test(knl, q, xd, yd, treed, vws[v])
+                # run code multiple times before actually adding to tests
+                if trial >= throw_out:
+                    tests[j+1][v] += GB/run_time
+                    # only evaluate scipy's speed the first time
+                    if v == 0 and j == 0:
+                        start_time = time.time()
+                        val = f(x)
+                        run_time = time.time() - start_time
+                        tests[0][0] += GB/run_time
+    print()
+
+    # average out each test
+    tests[0][0] /= float(n)
+    for i in range(1, len(tests)):
+        for j in range(len(vws)):
+            tests[i][j] /= float(n)
+
+    plt.figure()
+    plt.title("Throughput {0} precision from 0-20, bessel, {1} trials, vector width={2}-{3}".format(precision, n, vws[0], vws[-1]))
+    plt.xlabel("Function Evaluated")
+    plt.ylabel("Average Throughput (GB/s)")
+    #plt.yscale("log")
+    #plt.xscale("log")
+    plt.bar(0, tests[0][0], width=.5, align='center', color='r')
+    i = 0
+    xticks = ['scipy bessel']
+    colors = ['b', 'g', 'y', 'k', 'm', 'c']
+    for order in orders:
+        z = np.linspace(-.2, .2, len(vws))
+        for v in range(len(vws)):
+            plt.bar(i+1+z[v], tests[i+1][v], width=.3/len(vws), align='center', color=colors[i])
+        i+=1
+        xticks.append("{0}th order approx".format(order))
+    plt.xticks(range(len(orders)+1), xticks)
+    plt.show()
+
+
 # run the main program
 if __name__ == "__main__":
-    test_speed()
+    #test_speed()
+    test_throughput()
     #test_cheb_surf_speed()
     #test_exact_interpolants()
     #test_guaranteed_accuracy()
