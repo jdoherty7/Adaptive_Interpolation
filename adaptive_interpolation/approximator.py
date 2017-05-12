@@ -26,7 +26,6 @@ class Approximator(object):
             self.upper_bound = my_adapt.upper_bound
             self.lower_bound = my_adapt.lower_bound
             self.basis = my_adapt.basis
-            self.code = 0
             self.midpoints = []
             self.used_midpoints = []
             self.rel_errors = []
@@ -38,12 +37,20 @@ class Approximator(object):
             self.num_levels = self.tree.max_level+1
             self.tree_vector = [0] * (self.tree.size)
             self.make_tree_array(self.tree.root)
-            #self.convert_to_arrays(self.tree.root)
-            #print("=======TREE VECTOR======")
-            #for node in self.tree_vector:
-                #print(node)
-            #print("========================")
+
+            # these values are used for code generation and evaluation
             self.tree_1d = np.array(self.tree_1d())
+            self.code = 0
+            self.size = None
+            self.vector_width = None
+
+            # for evaluation
+            self.kernal = None
+            self.queue = None
+            self.x_dev = None
+            self.y_dev = None
+            self.tree_dev = None
+
 
     def tree_1d(self):
         tree_1d = []

@@ -15,11 +15,6 @@ import scipy.special as spec
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-#import adapt as adapt
-#import approximator as app
-#import generate as generate
-#import adaptive_interpolation as adapt_i
-
 
 import adaptive_interpolation.adapt as adapt
 import adaptive_interpolation.approximator as app
@@ -289,16 +284,15 @@ def test_speed():
 
 
 def test_throughput():
-    n = 50
+    n = 20
     throw_out = 40
     a, b = 0, 20
-    precision = 1e-14
-    vws = [1, 2, 4, 8, 32, 64] # vector widths
+    precision = 1e-4
+    vws = [4, 8, 32, 64] # vector widths
     size = 2**20
     x = np.linspace(a, b, size, dtype=np.float64)
     GB = size * 16/(8*2**20) # size times 16 bytes for each float64/GB
-    tests = []
-    orders = [9, 10, 11]
+    orders = [5]
 
     tests = [[0 for __ in range(len(vws))] for _ in range(len(orders)+ 1)]
 
@@ -306,20 +300,21 @@ def test_throughput():
         approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev')
         # test that the error is below the desired error and function is right
         if True:
-            y = np.linspace(a, b, 8*5e0)
-            generate.gen_test(approx, 8*5e0, vws[0])
-            knl, q, xd, yd, treed = generate.build_test(y, approx)
-            _, z = generate.run_test(knl, q, xd, yd, treed, vws[0])
+            y = np.linspace(a, b, 1000)
+            adapt_i.generate_code(approx, 1000, vws[0])
+            knl, q, xd, yd, treed = generate.build_code(y, approx)
+            print(approx.code)
+            _, z = generate.run_single(approx)#knl, q, xd, yd, treed, vws[0])
             rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
             print("rel_error",orders[j],rel_err) #check its <1e-14
 
         for v in range(len(vws)):
             # see how much time to process array
-            generate.gen_test(approx, size, vws[v])
-            knl, q, xd, yd, treed = generate.build_test(x, approx)
+            adapt_i.generate_code(approx, size, vws[v])
+            knl, q, xd, yd, treed = generate.build_code(x, approx)
             for trial in range(n+throw_out):
                 print("order: ",j,"/",len(orders),"\ttrial:",trial+1,"/",n+throw_out,end="\r")
-                run_time, _ = generate.run_test(knl, q, xd, yd, treed, vws[v])
+                run_time, _ = generate.run_single(approx)#knl, q, xd, yd, treed, vws[v])
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
                     tests[j+1][v] += GB/run_time

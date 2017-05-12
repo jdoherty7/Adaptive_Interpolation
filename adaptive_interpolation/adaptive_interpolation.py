@@ -26,56 +26,23 @@ def make_interpolant(a, b, func, order, error, basis="chebyshev",
 # to evaluate the interpolated function
 # by default the code generated is non branching and vectorized. if the code
 # is not vectorized then a domain_size must be given to the function
-def generate_code(approx, branching=0, vectorized=1, domain_size=None):
-    if (vectorized == 0) and (domain_size is None):
-        string_err = "Please enter the number of points"
-        string_err+= "that will be evaluated in domain_size."
+def generate_code(approx, size=None, vector_width=None):
+    if ((vector_width is not None) and (size is None)) \
+    or ((vector_width is None) and (size is not None)):
+        string_err = "Both vector width and domain_size must be given "
+        string_err+= "if running single threaded code."
         raise Exception(string_err)
+
+    approx.vector_width = vector_width
+    approx.size = size
     if approx.basis == 'monomial':
-        if not branching:
-            if vectorized:
-                code = generate.gen_mono_v(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_mono(approx, domain_size)
-        else:
-            if vectorized:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_mono_vb(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_mono_b(approx, domain_size)
-
+        code = generate.gen_mono(approx)
     elif approx.basis == 'chebyshev':
-        if not branching:
-            if vectorized:
-                code = generate.gen_cheb_v(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_cheb(approx, domain_size)
-        else:
-            if vectorized:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_cheb_vb(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_cheb_b(approx, domain_size)
-
+        code = generate.gen_cheb(approx)
     elif approx.basis == 'legendre':
-        if not branching:
-            if vectorized:
-                #raise Exception("This code generation option currently unavailable.")
-                code = generate.gen_leg_v(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_leg(approx, domain_size)
-        else:
-            if vectorized:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_mono_vb(approx)
-            else:
-                raise Exception("This code generation option currently unavailable.")
-                # code = generate.gen_leg_b(approx, domain_size)
+        code = generate.gen_leg(approx)
+    else:
+        raise Exception("Incorrect basis provided: monomial, chebyshev, legendre.")
     approx.code = code
     return code
 
@@ -107,19 +74,20 @@ def load_from_file(file_path):
         raise Exception(str_err)
 
 
-# code is a string of C code to be evaluated. x is a numpy array
-# that is a type float64 and is in the interval specified by the user
-# upon the creation of the interpolant. if the code is not vectorized
-# then the approximator class must also be given to the function
-def run_code(x, approx, vectorized=True):
+# x is evaluated according to given approximation class.
+# if vector_width is given to generative method then the
+# code is run single threaded with specified width
+def run_approximation(x, approx):
     if approx.code == 0:
         string_err = "Approximator class does not have any associated "
         string_err+= "code. Run a generate method to add code to the class."
         raise Exception(string_err)
-    if vectorized and (approx.basis == 'chebyshev' or approx.basis == 'legendre'):
-        return generate.run_ortho_vec(x, approx)
-    elif vectorized and approx.basis == 'monomial':
-        return generate.run_mono_vec(x, approx)
-    raise Exception("Non vectorized is not currently supported. \
-                     Please choose a vectorized method.")
+
+    if approx.vector_width is None:
+        output = run(x, approx)
+    else:
+        knl, q, x, y, tree = build_code(x, approx)
+        run_time, output = run_single(knl, q, x, y, tree, vector_width)
+    return run_time, output
+
 
