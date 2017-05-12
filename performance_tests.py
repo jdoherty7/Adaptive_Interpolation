@@ -71,9 +71,9 @@ def test_parallel(approx):
     size = 1e7
     interval = approx.heap[1][3]
     x = np.linspace(interval[0], inverval[1], size, dtype=np.float64)
-    nb_nv = adapt_i.generate_code(approx, 0, 0)
-    nb_v  = adapt_i.generate_code(approx, 0, 1)
-    b_nv  = adapt_i.generate_code(approx, 1, 0, size)
+    nb_nv = adapt_i.generate_code(approx)
+    nb_v  = adapt_i.generate_code(approx)
+    b_nv  = adapt_i.generate_code(approx)
     b_v   = adapt_i.generate_code(approx, 1, 1, size)
 
     # time run_code functions and return times
@@ -122,14 +122,12 @@ def test_exact_interpolants():
 
     a, b = -10, 10
     x = np.linspace(a, b, 1e5, dtype=np.float64)
+
     est1 = adapt_i.make_interpolant(a,b,order1,1,1e-9, "monomial").evaluate(x)
     est4 = adapt_i.make_interpolant(a,b,order4,4,1e-9, "monomial").evaluate(x)
     est6 = adapt_i.make_interpolant(a,b,order6,6,1e-9, "monomial").evaluate(x)
     est8 = adapt_i.make_interpolant(a,b,order8,8,1e-9, "monomial").evaluate(x)
-    plt.figure()
-    plt.plot(x, np.sin(np.sin(x)), 'r')
-    plt.plot(x, est1, 'b')
-    plt.show()
+
 
     print(la.norm(est1-order1(x), np.inf)/la.norm(order1(x), np.inf))
     print(la.norm(est4-order4(x), np.inf)/la.norm(order4(x), np.inf))
@@ -252,11 +250,12 @@ def test_speed():
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
                     tests[j+1][i] += run_time
-                    start_time = time.time()
-                    val = f(x)
-                    run_time = time.time() - start_time
-                    #print(la.norm(_-val,np.inf)/la.norm(val, np.inf))
-                    tests[0][i] += run_time
+                    if i ==0 and j == 0:
+                        start_time = time.time()
+                        val = f(x)
+                        run_time = time.time() - start_time
+                        print(la.norm(_-val,np.inf)/la.norm(val, np.inf))
+                        tests[0][i] += run_time
             print()
 
 
@@ -284,11 +283,11 @@ def test_speed():
 
 
 def test_throughput():
-    n = 20
+    n = 5
     throw_out = 40
     a, b = 0, 20
     precision = 1e-4
-    vws = [4, 8, 32, 64] # vector widths
+    vws = [1, 2, 4, 8, 32] # vector widths
     size = 2**20
     x = np.linspace(a, b, size, dtype=np.float64)
     GB = size * 16/(8*2**20) # size times 16 bytes for each float64/GB
@@ -311,6 +310,9 @@ def test_throughput():
         for v in range(len(vws)):
             # see how much time to process array
             adapt_i.generate_code(approx, size, vws[v])
+            print()
+            print(approx.code)
+            print(approx.size, approx.vector_width)
             knl, q, xd, yd, treed = generate.build_code(x, approx)
             for trial in range(n+throw_out):
                 print("order: ",j,"/",len(orders),"\ttrial:",trial+1,"/",n+throw_out,end="\r")
@@ -331,7 +333,7 @@ def test_throughput():
     for i in range(1, len(tests)):
         for j in range(len(vws)):
             tests[i][j] /= float(n)
-
+    print(tests)
     plt.figure()
     plt.title("Throughput {0} precision from 0-20, bessel, {1} trials, vector width={2}-{3}".format(precision, n, vws[0], vws[-1]))
     plt.xlabel("Function Evaluated")

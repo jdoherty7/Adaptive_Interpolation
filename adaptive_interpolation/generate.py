@@ -27,11 +27,10 @@ except:
 # see remez for start of this
 def gen_mono(ap):
     single = False if (ap.size is None and ap.vector_width is None) else True
-    print("MONO GENERATE: ", single)
     # maximum possible order of representation
-    max_or  = int(ap.max_order)
+    order = int(ap.max_order)
     if single:
-        string  = "for (int n = get_global_id(0); n < " + repr(int(ap.size))
+        string  = "for (int n=get_global_id(0); n<" + repr(int(ap.size))
         string += "; n+=" + repr(int(ap.vector_width)) + ") {\n"
     else:
         string  = "int n = get_global_id(0);\n"
@@ -40,17 +39,17 @@ def gen_mono(ap):
     string += "double x_const = x[n];\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
-    string += "(int)tree[index+{0}] :".format(4+order)
+    string += "(int)tree[index+{0}] : ".format(4+order)
     string += "(int)tree[index+{0}];\n".format(5+order)
     string += "}\n"
     string += "y[n] = "
     # the coefficients are transformed from a matrix to a vector.
     # the formula to call the correct entry is given as the indices
-    sub_string = "tree[index + {0}]".format(max_or + 2)
-    for j in range(max_or)[::-1]:
+    sub_string = "tree[index+{0}]".format(order+2)
+    for j in range(order)[::-1]:
         # using horner's method, this requires the for loop to be reversed
         sub_string = "x_const*(" + sub_string + \
-                     ") + tree[index + {0}]".format(j + 1)
+                     ") + tree[index+{0}]".format(j + 1)
     string += "" + sub_string
     string += ";\n"
     if single:
@@ -61,11 +60,11 @@ def gen_mono(ap):
 # generate C code that evaluates chebyshev polynomials
 # according to the approximator class that is given.
 def gen_cheb(ap):
-    single = False if (ap.size is None and ap.vector_width is None) else True
+    single = False if (ap.size is None or ap.vector_width is None) else True
     # maximum possible order of representation
     order = int(ap.max_order)
     if single:
-        string  = "for (int n = get_global_id(0); n < " + repr(int(ap.size))
+        string  = "for (int n=get_global_id(0); n<" + repr(int(ap.size))
         string += "; n+=" + repr(int(ap.vector_width)) + ") {\n"
     else:
         string  = "int n = get_global_id(0);\n"
@@ -74,7 +73,7 @@ def gen_cheb(ap):
     string += "double T0, T1, Tn, a, b, s, x_scaled;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
-    string += "(int)tree[index+{0}] :".format(4+order)
+    string += "(int)tree[index+{0}] : ".format(4+order)
     string += "(int)tree[index+{0}];\n".format(5+order)
     string += "} \n"
     # rescale variables
@@ -108,7 +107,7 @@ def gen_leg(ap):
     # maximum possible order of representation
     order = int(ap.max_order)
     if single:
-        string  = "for (int n = get_global_id(0); n < " + repr(int(ap.size))
+        string  = "for (int n=get_global_id(0); n<" + repr(int(ap.size))
         string += "; n+=" + repr(int(ap.vector_width)) + ") {\n"
     else:
         string  = "int n = get_global_id(0);\n" 
@@ -117,7 +116,7 @@ def gen_leg(ap):
     string += "double L0, L1, Ln, a, b, s, x_scaled;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
-    string += "(int)tree[index+{0}] :".format(4+order)
+    string += "(int)tree[index+{0}] : ".format(4+order)
     string += "(int)tree[index+{0}];\n".format(5+order)
     string += "} \n"
     # rescale variables
