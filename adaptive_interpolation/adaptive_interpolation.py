@@ -17,7 +17,17 @@ def make_interpolant(a, b, func, order, error, basis="chebyshev",
                       adapt_type="Trivial", dtype='64', accurate=True):
     my_adapt = adapt.Interpolant(func, order, error, basis, dtype, accurate)
     my_adapt.run_adapt(a, b, adapt_type)
-    return app.Approximator(my_adapt)
+    aproximation = app.Approximator(my_adapt)
+    dt = int(dtype)
+    if dt <=32:
+        ap.dtype = "float"
+    elif dt <= 64:
+        ap.dtype = "double"
+    elif dt <= 80:
+        ap.dtype = "long double"
+    else:
+        raise Exception("Incorrect data type specified")
+    return aproximation
 
 
 # Given an approximator class returned from a make an interpolant function,

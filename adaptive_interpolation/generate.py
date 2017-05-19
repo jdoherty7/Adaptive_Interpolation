@@ -36,7 +36,7 @@ def gen_mono(ap):
         string  = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 1;\n"
-    string += "double x_const = x[n];\n"
+    string += ap.dtype + " x_const = x[n];\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
     string += "(int)tree[index+{0}] : ".format(4+order)
@@ -70,7 +70,7 @@ def gen_cheb(ap):
         string  = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 0;\n"
-    string += "double T0, T1, Tn, a, b, s, x_scaled;\n"
+    string += ap.dtype" T0, T1, Tn, a, b, s, x_scaled;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
     string += "(int)tree[index+{0}] : ".format(4+order)
@@ -113,7 +113,7 @@ def gen_leg(ap):
         string  = "int n = get_global_id(0);\n" 
     # gives the index of the coefficients to use
     string += "int index = 0;\n"
-    string += "double L0, L1, Ln, a, b, s, x_scaled;\n"
+    string += ap.dtype + " L0, L1, Ln, a, b, s, x_scaled;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
     string += "(int)tree[index+{0}] : ".format(4+order)
@@ -168,8 +168,9 @@ def run(x, approx):
         y_dev = cl_array.empty_like(x_dev)
 
         # build the code to run from given string
-        declaration = "__kernel void sum(__global double *tree, "
-        declaration += "__global double *x, __global double *y) "
+        dt = approx.dtype
+        declaration = "__kernel void sum(__global " + dt + "  *tree, "
+        declaration += "__global "+dt+" *x, __global "+dt+" *y) "
         code = declaration + '{' + approx.code + '}'
 
         # compile code and then execute it
@@ -200,8 +201,9 @@ def build_code(x, approx):
         y_dev = cl_array.empty_like(x_dev)
 
         # build the code to run from given string
-        declaration = "__kernel void sum(__global double *tree, "
-        declaration += "__global double *x, __global double *y) "
+        dt = approx.dtype
+        declaration = "__kernel void sum(__global " + dt + "  *tree, "
+        declaration += "__global "+dt+" *x, __global "+dt+" *y) "
         code = declaration + '{' + approx.code + '}'
 
         prg = cl.Program(ctx, code).build()

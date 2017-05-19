@@ -33,17 +33,16 @@ class Node:
 class Interpolant(object):
     # defining parameters of an adaptive method
     def __init__(self, f, order, error, interpolant_choice, 
-                 dtype=None, guaranteed_accurate=True):
-        if error <= 2e-16:
-            string_err = "This package currently uses doubles thus an error"
-            string_err+= "tolerance of less than 1e-16 is not possible."
-            raise ValueError(string_err)
-        if dtype == "16":
-            self.dtype = np.float16
-        elif dtype == "32":
+                 dtype, guaranteed_accurate=True):
+        dt = int(dtype)
+        if dt <= 32:
             self.dtype = np.float32
-        else:
+        elif dt <= 64:
             self.dtype = np.float64
+        elif dt <= 80:
+            self.dtype = np.longdouble
+        else:
+            raise Exception("Incorrect data type specified")
         my_bool = interpolant_choice != 'chebyshev'
         my_bool = my_bool and interpolant_choice != 'legendre'
         my_bool = my_bool and interpolant_choice != 'monomial'

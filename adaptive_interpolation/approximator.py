@@ -43,6 +43,7 @@ class Approximator(object):
             self.code = 0
             self.size = None
             self.vector_width = None
+            self.dtype = my_adapt.dtype
 
             # for evaluation
             self.kernal = None
