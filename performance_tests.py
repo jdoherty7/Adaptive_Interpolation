@@ -286,9 +286,9 @@ def test_throughput():
     n = 10
     throw_out = 20
     a, b = 0, 20
-    precision = 1e-7
+    precision = 1e-6
     vws = [1, 2, 4, 8, 16] # vector widths
-    size = 2**19
+    size = 2**14
     x = np.linspace(a, b, size, dtype=np.float32)
     GB = size * 16./(8*2**20) # size times 16 bytes for each float64/GB
     orders = [8, 16]
@@ -296,7 +296,7 @@ def test_throughput():
     tests = [[0 for __ in range(len(vws))] for _ in range(len(orders)+ 1)]
 
     for j in range(len(orders)):
-        approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev', dtype='32')
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev', dtype='30')
         # test that the error is below the desired error and function is right
         if False:
             y = np.linspace(a, b, 1000)

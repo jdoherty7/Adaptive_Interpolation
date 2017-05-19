@@ -70,7 +70,7 @@ def gen_cheb(ap):
         string  = "int n = get_global_id(0);\n"
     # gives the index of the coefficients to use
     string += "int index = 0;\n"
-    string += ap.dtype" T0, T1, Tn, a, b, s, x_scaled;\n"
+    string += ap.dtype + " T0, T1, Tn, a, b, s, x_scaled;\n"
     string += "for(int i=1; i<{0}; i++)".format(int(ap.num_levels))
     string += "{\n\tindex = tree[index] > x[n] ? "
     string += "(int)tree[index+{0}] : ".format(4+order)
