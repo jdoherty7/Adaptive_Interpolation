@@ -88,15 +88,15 @@ def demo_adapt(function, order, allowed_error, basis,
 
     print("Creating Interpolant")
     my_approx = adapt_i.make_interpolant(a, b, function, order, 
-                            allowed_error, basis, adapt_type, accurate)
+                            allowed_error, basis, adapt_type, '32', accurate)
 
     print("\nGenerated Code:\n")
-    adapt_i.generate_code(my_approx,0,1)
+    adapt_i.generate_code(my_approx)
     print(my_approx.code)
     print("Evaluating Interpolant")
     x = np.linspace(a, b, 1e3, dtype=np.float64)
-    if with_pyopencl: 
-        est = adapt_i.run_code(x, my_approx, vectorized=True)
+    if with_pyopencl and False: 
+        est = adapt_i.run_approximation(x, my_approx)
     else: 
         est = my_approx.evaluate(x)
     print("Evaluating Function")
@@ -174,5 +174,5 @@ def main_demo():
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f1, 7, 1e-5, 'chebyshev', accurate=False, animate=True, b=10)
+    demo_adapt(f1, 4, .4, 'chebyshev', accurate=False, animate=True, b=5)
 

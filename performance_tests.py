@@ -211,22 +211,22 @@ def test_cheb_surf_speed():
 
 def test_speed():
     n = 20
-    throw_out=20
+    throw_out=40
     a, b = 0, 20
-    sizes = 2**np.arange(5, 18)
+    sizes = 2**np.arange(3, 19)
     #sizes = np.linspace(1e2, 5e6, 5, dtype=np.int)
     tests = []
-    orders = [4, 5, 6, 7, 8]
-    tests.append(0*np.ones(sizes.shape))
+    orders = [5, 9]
+    tests.append(0*np.zeros(sizes.shape))
  
-    tests.append(0*np.ones(sizes.shape))
+    tests.append(0*np.zeros(sizes.shape))
     for j in range(len(orders)):
-        tests.append(0*np.ones(sizes.shape))
-        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-6, 'chebyshev')
+        tests.append(0*np.zeros(sizes.shape))
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], 1e-9, 'chebyshev')
         y = np.linspace(a, b, 8*5e0)
-        generate.gen_test(approx, 8*5e0)
-        knl, q, xd, yd, treed = generate.build_test(y, approx)
-        _, z = generate.run_test(knl, q, xd, yd, treed)
+        adapt_i.generate_code(approx, 8*5e0, 1)
+        knl, q, xd, yd, treed = generate.build_code(y, approx)
+        _, z = generate.run_single(approx)#knl, q, xd, yd, treed)
         if False:
             print(approx.code)
             plt.figure()
@@ -241,20 +241,24 @@ def test_speed():
         for i in range(sizes.shape[0]):
             index = 0
             x = np.linspace(a, b, sizes[i])
-            generate.gen_test(approx, sizes[i])
-            knl, q, xd, yd, treed = generate.build_test(x, approx)
+            adapt_i.generate_code(approx, sizes[i], 1)
+            knl, q, xd, yd, treed = generate.build_code(x, approx)
             for trial in range(n+throw_out):
                 print(i+1, "/", sizes.shape[0], "\ttrial:", trial+1, "/", n+throw_out, end="\r")
                 #knl, q, xd, yd, treed = generate.build_test(x, approx)
-                run_time, _ = generate.run_test(knl, q, xd, yd, treed)
+                run_time, _ = generate.run_single(approx)#knl, q, xd, yd, treed)
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
                     tests[j+1][i] += run_time
-                    if i ==0 and j == 0:
+                    if j == 0:
+                        if trial-throw_out > 17:
+                            print("mine",run_time)
                         start_time = time.time()
                         val = f(x)
                         run_time = time.time() - start_time
-                        print(la.norm(_-val,np.inf)/la.norm(val, np.inf))
+                        #print(la.norm(_-val,np.inf)/la.norm(val, np.inf))
+                        if trial - throw_out > 17:
+                            print("scipy",run_time, sizes[i], trial-throw_out)
                         tests[0][i] += run_time
             print()
 
@@ -283,22 +287,22 @@ def test_speed():
 
 
 def test_throughput():
-    n = 5
+    n = 10
     throw_out = 40
     a, b = 0, 20
     precision = 1e-4
-    vws = [1, 2, 4, 8, 32] # vector widths
-    size = 2**20
+    vws = [1, 2, 4, 8, 16] # vector widths
+    size = 2**10
     x = np.linspace(a, b, size, dtype=np.float64)
     GB = size * 16/(8*2**20) # size times 16 bytes for each float64/GB
-    orders = [5]
+    orders = [9]
 
     tests = [[0 for __ in range(len(vws))] for _ in range(len(orders)+ 1)]
 
     for j in range(len(orders)):
         approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev')
         # test that the error is below the desired error and function is right
-        if True:
+        if False:
             y = np.linspace(a, b, 1000)
             adapt_i.generate_code(approx, 1000, vws[0])
             knl, q, xd, yd, treed = generate.build_code(y, approx)
@@ -311,21 +315,21 @@ def test_throughput():
             # see how much time to process array
             adapt_i.generate_code(approx, size, vws[v])
             print()
-            print(approx.code)
-            print(approx.size, approx.vector_width)
+            #print(approx.code)
+            #print(approx.size, approx.vector_width)
             knl, q, xd, yd, treed = generate.build_code(x, approx)
             for trial in range(n+throw_out):
                 print("order: ",j,"/",len(orders),"\ttrial:",trial+1,"/",n+throw_out,end="\r")
                 run_time, _ = generate.run_single(approx)#knl, q, xd, yd, treed, vws[v])
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
-                    tests[j+1][v] += GB/run_time
+                    tests[j+1][v] += run_time
                     # only evaluate scipy's speed the first time
                     if v == 0 and j == 0:
                         start_time = time.time()
                         val = f(x)
                         run_time = time.time() - start_time
-                        tests[0][0] += GB/run_time
+                        tests[0][0] += run_time
     print()
 
     # average out each test
@@ -333,9 +337,9 @@ def test_throughput():
     for i in range(1, len(tests)):
         for j in range(len(vws)):
             tests[i][j] /= float(n)
-    print(tests)
+
     plt.figure()
-    plt.title("Throughput {0} precision from 0-20, bessel, {1} trials, vector width={2}-{3}".format(precision, n, vws[0], vws[-1]))
+    plt.title("avg runtime {0} precision from 0-20, bessel, {1} trials, vector width={2}-{3}".format(precision, n, vws[0], vws[-1]))
     plt.xlabel("Function Evaluated")
     plt.ylabel("Average Throughput (GB/s)")
     #plt.yscale("log")
@@ -356,8 +360,8 @@ def test_throughput():
 
 # run the main program
 if __name__ == "__main__":
-    #test_speed()
-    test_throughput()
+    test_speed()
+    #test_throughput()
     #test_cheb_surf_speed()
     #test_exact_interpolants()
     #test_guaranteed_accuracy()

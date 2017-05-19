@@ -33,11 +33,17 @@ class Node:
 class Interpolant(object):
     # defining parameters of an adaptive method
     def __init__(self, f, order, error, interpolant_choice, 
-                 guaranteed_accurate=True):
+                 dtype=None, guaranteed_accurate=True):
         if error <= 2e-16:
             string_err = "This package currently uses doubles thus an error"
             string_err+= "tolerance of less than 1e-16 is not possible."
             raise ValueError(string_err)
+        if dtype == "16":
+            self.dtype = np.float16
+        elif dtype == "32":
+            self.dtype = np.float32
+        else:
+            self.dtype = np.float64
         my_bool = interpolant_choice != 'chebyshev'
         my_bool = my_bool and interpolant_choice != 'legendre'
         my_bool = my_bool and interpolant_choice != 'monomial'
@@ -61,31 +67,32 @@ class Interpolant(object):
         self.tree.size+=1
         self.allowed_error = error
         self.guaranteed_accurate = guaranteed_accurate
+        self.leaves = []
 
     # function to evaluate Legendre polynomials of a number, x, up to order n
     def legendre(self, n, x):
         if n == 0:
-            return np.array([1.], dtype=np.float64)
+            return np.array([1.], dtype=self.dtype)
         elif n == 1:
-            return np.array([1., x], dtype=np.float64)
+            return np.array([1., x], dtype=self.dtype)
         elif n > 1:
-            L = [np.float64(1.), np.float64(x)]
+            L = [self.dtype(1.), self.dtype(x)]
             for i in range(2, int(n+1)):
-                first_term = np.float64(2*i-1)*np.float64(x)*L[i-1]
-                second_term = np.float64(i-1)*L[i-2]
+                first_term = self.dtype(2*i-1)*self.dtype(x)*L[i-1]
+                second_term = self.dtype(i-1)*L[i-2]
                 L.append((first_term + second_term)*(1./n))
             return np.array(L)
 
     # function to evaluate chebyshev polynomials of a value x up to order n
     def chebyshev(self, n, x):
         if n == 0:
-            return np.array([1.], dtype=np.float64)
+            return np.array([1.], dtype=self.dtype)
         elif n == 1:
-            return np.array([1., x], dtype=np.float64)
+            return np.array([1., x], dtype=self.dtype)
         elif n > 1:
-            C = [np.float64(1.), np.float64(x)]
+            C = [self.dtype(1.), self.dtype(x)]
             for i in range(2, int(n+1)):
-                C.append(np.float64(2*x)*C[i-1] - C[i-2])
+                C.append(self.dtype(2*x)*C[i-1] - C[i-2])
             return np.array(C)
 
     # transformation for othroganal functions, from [a, b] -> [-1, 1]
@@ -101,7 +108,7 @@ class Interpolant(object):
         elif (basis == 'chebyshev'):
             return self.chebyshev(n, self.transform(x, a, b))
         else:
-            return np.array([x**i for i in range(int(n)+1)], dtype=np.float64)
+            return np.array([x**i for i in range(int(n)+1)], dtype=self.dtype)
 
     # given a list of coefficients, evaluate what the interpolant's value
     # will be for the given x value(s). Assumes that x is an array
@@ -112,13 +119,13 @@ class Interpolant(object):
             xs = self.basis_function(x0, order, basis, a, b)
             val = np.dot(coeff, xs)
             my_vals.append(val)
-        return np.array(my_vals, dtype=np.float64)
+        return np.array(my_vals, dtype=self.dtype)
 
     # gets n chebyshev nodes from a to b
     def get_cheb(self, a, b, n):
         if n == 1:
-            return np.array([(a+b)/2.], dtype=np.float64)
-        k = np.array(range(1, int(n) + 1)[::-1], dtype=np.float64)
+            return np.array([(a+b)/2.], dtype=self.dtype)
+        k = np.array(range(1, int(n) + 1)[::-1], dtype=self.dtype)
         nodes = np.cos((2.*k - 2.)*np.pi/(2.*int(n-1)))
         # change range from -1 to 1 to a to b
         return (b-a)*.5*(nodes + 1.) + a
@@ -141,16 +148,41 @@ class Interpolant(object):
     def find_error_new(self, coeff, a, b, order):
         #n = max(1e6, int((b-a)/self.allowed_error)+1)
         #n = min(5e3, n)
-        n = 1e3
+        n = 5e2
         lb, ub = self.lower_bound, self.upper_bound
         num_nodes = 100*(ub - lb)
-        full_x = np.linspace(lb, ub, num_nodes, dtype=np.float64)
-        x = np.linspace(a, b, n, dtype=np.float64)
+        full_x = np.linspace(lb, ub, num_nodes, dtype=self.dtype)
+        x = np.linspace(a, b, n, dtype=self.dtype)
         approx = self.eval_coeff(coeff, x, self.basis, order, a, b)
         actual = self.function(x)
         max_abs_err = la.norm(approx - actual, np.inf)
         max_val_full_int = la.norm(self.function(full_x), np.inf)
         return max_abs_err/max_val_full_int
+
+    def adapt_prune(self, a, b):
+        if a == b: return
+        data, ap = self.find_left(a, b)
+        self.leaves.append(data)
+        self.adapt_prune(a, b)
+
+    def find_left(self, a, b):
+        while this_error > self.allowed_error:
+            nodes = self.get_cheb(a, b, self.max_order+1)
+            coeff = self.interpolate(nodes, self.basis, a, b)
+            if coeff is None:
+                string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
+                string_err1+= "If using monomials try using an orthogonal polynomial.\n"
+                string_err1+= "Otherwise, try a different order interpolant, lower the\n"
+                string_err1+= "allowed error, or set accurate=False\n"
+                if self.guaranteed_accurate:
+                    raise ValueError(string_err1)
+                else:
+                    break 
+            this_error = self.find_error_new(coeff, a, b, self.max_order)
+            data = [(a+b)/2., coeff, [a, b], this_error]
+            b = (a+b)/2.
+        return data, data[2][1]
+
 
     # adaptive method finding an interpolant for a function
     # this uses a specified order and basis function
@@ -282,7 +314,7 @@ class Interpolant(object):
         if nodes.shape[0] > 2:
             err = lambda x: np.abs(self.eval_coeff(coeff, x, self.basis, n,
                                    a, b) - self.function(x))
-            new_nodes = np.zeros(len(nodes))
+            new_nodes = np.zeros(len(nodes), dtype=self.dtype)
             new_nodes[0] = nodes[0]
             new_nodes[-1] = nodes[-1]
             for i in range(1, len(nodes)-1):
@@ -335,8 +367,8 @@ class Interpolant(object):
             else:
                 return
         # get coeff on interval utilizing the remez algorithm
-        coeff, M = self.remez(a, b, self.max_order)
-        if coeff is None:
+        ret = self.remez(a, b, self.max_order)
+        if ret is None:
             if self.guaranteed_accurate:
                 string_err1 = "Singular matrix obtained on bounds [{0} {1}]\n".format(a, b)
                 string_err1+= "If using monomials try using an orthogonal polynomial.\n"
@@ -345,6 +377,7 @@ class Interpolant(object):
                 raise ValueError(string_err1)
             else:
                 return
+        coeff, M = ret[0], ret[1]
         this_error = self.find_error_new(coeff, a, b, self.max_order)
         node.data = [(a+b)/2., coeff, [a, b], this_error]
         if (this_error > self.allowed_error):
@@ -360,13 +393,184 @@ class Interpolant(object):
     def run_adapt(self, lower_bound, upper_bound, adapt_type):
         if upper_bound <= lower_bound:
             raise Exception("Upper bound must be greater than lower bound.")
-        self.lower_bound = lower_bound
-        self.upper_bound = upper_bound
+        self.lower_bound = self.dtype(lower_bound)
+        self.upper_bound = self.dtype(upper_bound)
         if adapt_type.lower() == "variable":
             self.variable_order_adapt(lower_bound, upper_bound, 1)
         elif adapt_type.lower() == "remez":
             self.remez_adapt(lower_bound, upper_bound, 1)
         else:
             self.adapt(lower_bound, upper_bound, self.tree.root)
+        """
+        leaves = []
+        print("Pruning")
+        self.make_leaves(self.tree.root, leaves)
+        for node in leaves:
+            print(node.data)
+        self.prune(leaves)
+        #leaves=[]
+        #self.make_leaves(self.tree.root, [])
+        for node in leaves:
+            print(node.data)
+        print(self.tree.max_level)
+        self.pm(self.tree.root)
+        self.tree.max_level = 0
+        self.set_max_level(self.tree.root)
+        print(self.tree.max_level)
+        """
+
+    #####################################
+    #                                   #
+    #       PRUNING FUNCTIONS           #
+    #                                   #
+    #####################################
+
+    # reset trees max level after pruning
+    def set_max_level(self, node):
+        if node == 0: return
+        self.tree.max_level = max(self.tree.max_level, node.level)
+        self.set_max_level(node.left)
+        self.set_max_level(node.right)
+
+    def make_leaves(self, node, leaves):
+        if node == 0 or node == None:
+            return
+        self.make_leaves(node.left, leaves)
+        # remove extraneous nodes with data == 0 and append leaves
+        if node.left != 0:
+            if node.left.data == 0:
+                node.left = 0
+        if node.right != 0:
+            if node.right.data == 0:
+                node.right = 0
+        if node.left == 0 and node.right == 0 and node.data != 0:
+            leaves.append(node)
+        self.reset(node)
+        self.make_leaves(node.right, leaves)
+
+    # prune the tree more once uneeded leaves are removed. This
+    # is used to correctly shorten tree
+    def pm(self, node):
+        print(node, node.data[0], node.left, node.right)
+        if node == 0:
+            return
+        if node.left == 0 and node.right == 0:
+            return
+        elif node.left == 0 and node.right != 0:
+            #print("right", node, node.data)
+            node.right.parent = node.parent
+            self.tree.size-=1
+            node = node.right
+            node.parent.right = node
+            self.pm(node)
+        elif node.left != 0 and node.right == 0:
+            #print("left", node, node.data)
+            node.left.parent = node.parent
+            self.tree.size-=1
+            node = node.left
+            node.parent.left = node
+            self.pm(node)
+        else:
+            # both children exist
+            self.pm(node.left)
+            self.pm(node.left)
+
+    def reset(self, node):
+        if node == 0: return
+        if node.right == 0 or node.left == 0: return
+        node.data[0] = (node.right.data[0] + node.left.data[0])/2.
+        self.reset(node.parent)
+
+    # combine leaves that can be combined
+    def prune(self, leaves):
+        i = 0
+        j = 1
+        while i < len(leaves)-1:
+            node = leaves[i]
+            if node != None and i+j < len(leaves):
+                next_node = leaves[i+j]
+                error = node.data[3]
+                a = node.data[2][0]
+                b = next_node.data[2][1]
+                nodes = self.get_cheb(a, b, self.max_order+1)
+                new_coeff = self.interpolate(nodes, self.basis, a, b)
+                new_error = self.find_error_new(new_coeff, a, b, self.max_order)
+                if new_error <= self.allowed_error:
+                    if node.level < next_node.level:
+                        node.data = [(a+b)/2., new_coeff, [a, b], new_error]
+                        parent = next_node.parent
+                        if parent.left == next_node:
+                            parent.left = 0
+                        elif parent.right == next_node:
+                            parent.right = 0
+                        else:
+                            raise Exception("Wrong parent!")
+                        self.tree.size-=1
+                        del next_node
+                        del leaves[i+j]
+                        j+=1
+                    else:
+                        next_node.data = [(a+b)/2., new_coeff, [a, b], new_error]
+                        parent = node.parent
+                        if parent.left == node:
+                            parent.left = 0
+                        elif parent.right == node:
+                            parent.right = 0
+                        else:
+                            raise Exception("Wrong parent!")
+                        self.tree.size-=1
+                        del node
+                        del leaves[i]
+                        i+=j
+                        j=1
+                else:
+                    i+=j
+                    j = 1
+            else:
+                i+=1
+                j=1
+
+
+    def prune2(self, node):
+        if node == 0:
+            return
+        if node.left != 0 and node.right != 0:
+            if node.right.right != 0 and node.right.left != 0 \
+            and node.left.right == 0 and node.left.left == 0:
+                # right grandchildren but no left grandchildren
+                a = node.left.data[2][0]
+                print(node.right.left.data)
+                b = node.right.left.data[2][1]
+                nodes = self.get_cheb(a, b, self.max_order+1)
+                new_coeff = self.interpolate(nodes, self.basis, a, b)
+                new_error = self.find_error_new(new_coeff, a, b, self.max_order)
+                if new_error <= self.allowed_error:
+                    node.left.data = [(a+b)/2., new_coeff, [a, b], new_error]
+                    node.right.left = None
+                    node.right = node.right.right
+                    node.right.parent = node
+                    node.data[0] = (node.right.data[0] + node.left.data[0])/2.
+                    self.tree.size-=2
+                    self.prune2(node)
+            if node.right.right == 0 and node.right.left == 0 \
+            and node.left.right != 0 and node.left.left != 0:
+                # left grandchildren but no right grandchildren
+                print("a", node.left.right.data)
+                a = node.left.right.data[2][0]
+                b = node.right.data[2][1]
+                nodes = self.get_cheb(a, b, self.max_order+1)
+                new_coeff = self.interpolate(nodes, self.basis, a, b)
+                new_error = self.find_error_new(new_coeff, a, b, self.max_order)
+                if new_error <= self.allowed_error:
+                    node.right.data = [(a+b)/2., new_coeff, [a, b], new_error]
+                    node.left.right = None
+                    node.left = node.left.left
+                    node.left.parent = node
+                    node.data[0] = (node.right.data[0] + node.left.data[0])/2.
+                    self.tree.size-=2
+                    self.prune2(node)
+        self.prune2(node.left)
+        self.prune2(node.right)
+
 
 

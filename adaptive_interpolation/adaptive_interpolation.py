@@ -14,10 +14,9 @@ import adaptive_interpolation.generate as generate
 # maximum allowed error and returns an Approximator class representing
 # a monomial interpolant that fits those parameters
 def make_interpolant(a, b, func, order, error, basis="chebyshev",
-                      adapt_type="Trivial", accurate=True):
-    my_adapt = adapt.Interpolant(func, np.float64(order),
-                                 np.float64(error), basis, accurate)
-    my_adapt.run_adapt(np.float64(a), np.float64(b), adapt_type)
+                      adapt_type="Trivial", dtype='64', accurate=True):
+    my_adapt = adapt.Interpolant(func, order, error, basis, dtype, accurate)
+    my_adapt.run_adapt(a, b, adapt_type)
     return app.Approximator(my_adapt)
 
 
@@ -84,10 +83,11 @@ def run_approximation(x, approx):
         raise Exception(string_err)
 
     if approx.vector_width is None:
-        output = run(x, approx)
+        output = generate.run(x, approx)
+        run_time = None
     else:
-        knl, q, x, y, tree = build_code(x, approx)
-        run_time, output = run_single(knl, q, x, y, tree, vector_width)
+        knl, q, x, y, tree = generate.build_code(x, approx)
+        run_time, output = generate.run_single(knl, q, x, y, tree, vector_width)
     return run_time, output
 
 

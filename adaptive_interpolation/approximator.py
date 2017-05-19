@@ -39,7 +39,7 @@ class Approximator(object):
             self.make_tree_array(self.tree.root)
 
             # these values are used for code generation and evaluation
-            self.tree_1d = np.array(self.tree_1d())
+            self.tree_1d = np.array(self.tree_1d(), dtype=my_adapt.dtype)
             self.code = 0
             self.size = None
             self.vector_width = None
@@ -57,16 +57,15 @@ class Approximator(object):
         # tree = [mid, coeff0, coeff1, .., coeffn,
         #         a, b, left_index, right_index, ...]
         for node in self.tree_vector:
-            for i in range(len(node)):
-                # node = [data, left_index, right_index]
-                if not isinstance(node[i], (float, int)):
-                    for j in range(len(node[i])):
-                        if not isinstance(node[i][j], (float, int)):
-                            for k in range(len(node[i][j])):
-                                tree_1d.append(node[i][j][k])
-                        elif j != 3: #dont add error into struct
-                            #print(node[i][j], j)
-                            tree_1d.append(node[i][j])
+            if not isinstance(node, (float, int, np.float32, np.float64, np.float16)):
+                for i in range(len(node)):
+                    if not isinstance(node[i], (float, int, np.float32, np.float64, np.float16)):
+                        for j in range(len(node[i])):
+                            if not isinstance(node[i][j], (float, int, np.float32, np.float64, np.float16)):
+                                for k in range(len(node[i][j])):
+                                    tree_1d.append(node[i][j][k])
+                            elif j != 3: #dont add error into struct
+                                tree_1d.append(node[i][j])
                 else:
                     tree_1d.append(node[i]*(self.max_order+6))
         return tree_1d
@@ -89,7 +88,7 @@ class Approximator(object):
     def make_tree_array(self, node):
         self.curr_index += 1
         my_index = self.curr_index
-        if node.left == 0 or node.right == 0:
+        if node.left == 0 or node.right == 0 or node.left == node or node.right == node:
             self.tree_vector[my_index] = [node.data, my_index, my_index]
             return my_index
         left_index = self.make_tree_array(node.left)

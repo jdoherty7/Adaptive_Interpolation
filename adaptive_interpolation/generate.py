@@ -174,6 +174,7 @@ def run(x, approx):
 
         # compile code and then execute it
         prg = cl.Program(ctx, code).build()
+
         prg.sum(queue, x_dev.shape, None, tree_dev.data, 
                 x_dev.data, y_dev.data)
 
@@ -204,6 +205,11 @@ def build_code(x, approx):
         code = declaration + '{' + approx.code + '}'
 
         prg = cl.Program(ctx, code).build()
+        #print()
+        #print(ctx.devices[0])
+        #print("\n\n\n\n", prg.binaries, "\n\n\n\n\n\n")
+ 
+
         knl = prg.sum
         queue.finish()
 
