@@ -188,22 +188,19 @@ def run(x, approx):
 
 # builds a pyopencl kernal object that can be used to 
 # run the generated and built code multiple times with different inputs
-def build_code(x, approx):
+def build_code(approx):
     if with_pyopencl:
         ctx = cl.create_some_context()
         queue = cl.CommandQueue(ctx)
 
         queue.finish()
         tree = approx.tree_1d
-
-        x_dev = cl_array.to_device(queue, x)
         tree_dev = cl_array.to_device(queue, tree)
-        y_dev = cl_array.empty_like(x_dev)
 
         # build the code to run from given string
         dt = approx.dtype
         declaration = "__kernel void sum(__global " + dt + "  *tree, "
-        declaration += "__global "+dt+" *x, __global "+dt+" *y) "
+        declaration += "__global " + dt + " *x, __global " + dt + " *y) "
         code = declaration + '{' + approx.code + '}'
 
         prg = cl.Program(ctx, code).build()
@@ -217,31 +214,35 @@ def build_code(x, approx):
 
         approx.kernal   = knl
         approx.queue    = queue
-        approx.x_dev    = x_dev
-        approx.y_dev    = y_dev
         approx.tree_dev = tree_dev
 
-        return knl, queue, x_dev, y_dev, tree_dev
+        return knl, queue, tree_dev
     else:
         raise ValueError("Function requires pyopencl installation.")
 
 
-def run_single(ap):
+def run_single(x, ap):
+    x_dev = cl_array.to_device(ap.queue, x)
+    y_dev = cl_array.empty_like(x_dev)
+
     ap.queue.finish()
     start = time.time()
     ap.kernal(ap.queue, (int(ap.vector_width),), (int(ap.vector_width),),
-              ap.tree_dev.data, ap.x_dev.data, ap.y_dev.data)
+              ap.tree_dev.data, x_dev.data, y_dev.data)
     ap.queue.finish()
     end = time.time() - start
-    return end, ap.y_dev.get()
+    return end, y_dev.get()
 
 
-def run_multi(ap):
+def run_multi(x, ap):
+    x_dev = cl_array.to_device(ap.queue, x)
+    y_dev = cl_array.empty_like(x_dev)
+
     ap.queue.finish()
     start = time.time()
-    ap.knl(ap.queue, ap.x_dev.shape, None, ap.tree_dev.data, ap.x_dev.data, ap.y_dev.data)
+    ap.knl(ap.queue, x_dev.shape, None, ap.tree_dev.data, x_dev.data, ay_dev.data)
     ap.queue.finish()
     end = time.time() - start
-    return end, ap.y_dev.get()
+    return end, y_dev.get()
 
 

@@ -26,8 +26,25 @@ import adaptive_interpolation.adaptive_interpolation as adapt_i
 
 
 # bessel function for testing
-def f(x):
-    return spec.jn(0, x)
+def f(x, order=0):
+    return spec.jn(order, x)
+
+
+def f0(x, v):
+    if v == 0:
+        return f(x)
+    elif v == 1:
+        return spec.jn(10, x)
+    elif v== 2:
+        return spec.hankel1(0, x)
+    elif v == 3:
+        return spec.hankel1(10, x)
+    elif v == 4:
+        return spec.hankel2(0, x)
+    elif v == 5:
+        return spec.hankel2(10, x)
+    else:
+        return spec.airy(x)
 
 
 # a function for testing
@@ -238,7 +255,7 @@ def test_speed():
             adapt_i.generate_code(approx, sizes[i], 1)
             knl, q, xd, yd, treed = generate.build_code(x, approx)
             for trial in range(n+throw_out):
-                print "order: "+repr(j)+"/"+repr(len(orders))+"\ttrial:"+repr(trial+1)+"/"+repr(n+throw_out)+"\r"
+                print("order: "+repr(j)+"/"+repr(len(orders))+"\ttrial:"+repr(trial+1)+"/"+repr(n+throw_out)+"\r")
                 run_time, _ = generate.run_single(approx)
                 # run code multiple times before actually adding to tests
                 if trial >= throw_out:
@@ -282,66 +299,60 @@ def test_speed():
 
 
 
-def test_throughput():
-    n = 10
+def test_throughput(n, d, precision, size):
+    if d != '32' and d != '64': return
     throw_out = 20
     a, b = 0, 20
-    precision = 1e-6
-    vws = [1, 2, 4, 8, 16] # vector widths
+    vws = [1, 2, 4, 8, 16, 32, 64]
     size = 2**14
-    x = np.linspace(a, b, size, dtype=np.float32)
-    GB = size * 16./(8*2**20) # size times 16 bytes for each float64/GB
-    orders = [8, 16]
+    GB = size * float(d) / (8*2**20) # number of bits / a GB = # of GB
+    orders = [9]
 
     tests = [[0 for __ in range(len(vws))] for _ in range(len(orders)+ 1)]
 
     for j in range(len(orders)):
-        approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev', dtype='30')
-        # test that the error is below the desired error and function is right
-        if False:
-            y = np.linspace(a, b, 1000)
-            adapt_i.generate_code(approx, 1000, vws[0])
-            knl, q, xd, yd, treed = generate.build_code(y, approx)
-            print(approx.code)
-            _, z = generate.run_single(approx)#knl, q, xd, yd, treed, vws[0])
-            rel_err = la.norm(z-f(y),np.inf)/la.norm(f(y), np.inf)
-            print("rel_error",orders[j],rel_err) #check its <1e-14
-
+        approx = adapt_i.make_interpolant(a, b, f, orders[j], precision, 'chebyshev', dtype=d)
         for v in range(len(vws)):
             # see how much time to process array
             adapt_i.generate_code(approx, size, vws[v])
             print()
-            knl, q, xd, yd, treed = generate.build_code(x, approx)
+            knl, q, treed = generate.build_code(approx)
+            print(approx.code)
             for trial in range(n+throw_out):
-                print "order: "+repr(j)+"/"+repr(len(orders))+"\ttrial:"+repr(trial+1)+"/"+repr(n+throw_out)+"\r"
-                run_time, _ = generate.run_single(approx)#knl, q, xd, yd, treed, vws[v])
+                print("order: "+repr(j)+"/"+repr(len(orders))+"\ttrial:"+repr(trial+1)+"/"+repr(n+throw_out)+"\r")
+                o = np.float32 if d == '32' else np.float64
+                x = np.random.uniform(a, b, size=size).astype(o)
+                run_time, _ = generate.run_single(x, approx)
                 # run code multiple times before actually adding to tests
-                if trial >= throw_out:
+                if trial > throw_out:
                     tests[j+1][v] += GB/run_time
                     # only evaluate scipy's speed the first time
-                    if v == 0 and j == 0:
+                    if j == 0:
                         start_time = time.time()
-                        val = f(x)
+                        val = f(x, v)
                         run_time = time.time() - start_time
-                        tests[0][0] += GB/run_time
+                        tests[0][v] += GB/run_time
     print()
 
     # average out each test
-    tests[0][0] /= float(n)
-    for i in range(1, len(tests)):
+    #tests[0][0] /= float(n)
+    for i in range(len(tests)):
         for j in range(len(vws)):
             tests[i][j] /= float(n)
 
     fig = plt.figure()
-    plt.title("throughput {0} prec NVIDIA CUDA, bessel 0-20, {1} trials, vw={2}-{3}".format(precision, n, vws[0], vws[-1]))
+    plt.title("throughput {0} single, {1} trials, vw={2}".format(precision, n, vws[0]))
     plt.xlabel("Function Evaluated")
     plt.ylabel("Average Throughput (GB/s)")
     #plt.yscale("log")
     #plt.xscale("log")
-    plt.bar(0, tests[0][0], width=.5, align='center', color='r')
+    #plt.bar(0, tests[0][0], width=.5, align='center', color='r')
     i = 0
-    xticks = ['scipy bessel']
+    z = np.linspace(-.2, .2, len(vws))
     colors = ['b', 'g', 'y', 'k', 'm', 'c']
+    for v in range(len(vws)):
+        plt.bar(i+z[v], tests[i][v], width=.3/len(vws), align='center', color=colors[i])
+    xticks = ['scipy specials']
     for order in orders:
         z = np.linspace(-.2, .2, len(vws))
         for v in range(len(vws)):
@@ -350,7 +361,7 @@ def test_throughput():
         xticks.append("{0}th order approx".format(order))
     plt.xticks(range(len(orders)+1), xticks)
     #plt.show()
-    string = "data/32t"+repr(time.time())+"n"+repr(n)+"+vw"+repr(vws[0])+repr(vws[-1])+"o"+repr(orders[0])+".png"
+    string = "../data/00"+repr(d)+"t"+repr(time.time()%100)+"n"+repr(n)+"+vw"+repr(vws[0])+repr(vws[-1])+"o"+repr(orders[0])+repr(precision)+repr(size)+".png"
     fig.savefig(string)
 
 
@@ -358,8 +369,16 @@ def test_throughput():
 # run the main program
 if __name__ == "__main__":
     #test_speed()
-    test_throughput()
+    #test_throughput()
+
+    p = 1e-6
+    for d in ['32', '64']:
+        for size in [2**10, 2**14]:
+            test_throughput(25, d, p, size)
+
+
     #test_cheb_surf_speed()
     #test_exact_interpolants()
     #test_guaranteed_accuracy()
     #test_all_parallel_methods()
+

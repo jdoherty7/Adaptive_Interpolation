@@ -96,8 +96,8 @@ def run_approximation(x, approx):
         output = generate.run(x, approx)
         run_time = None
     else:
-        knl, q, x, y, tree = generate.build_code(x, approx)
-        run_time, output = generate.run_single(knl, q, x, y, tree, vector_width)
+        knl, q, tree = generate.build_code(approx)
+        run_time, output = generate.run_single(x, approx)
     return run_time, output
 
 
