@@ -1,0 +1,4 @@
+/bin/mkdir -p objs/
+~/Desktop/ispc-v1.9.1-linux/ispc -g -O0 --arch=x86-64 --target=avx2 --woff simple_ispc.ispc -o objs/simple_ispc.o -h objs/simple_ispc.h
+g++ -m64 -std=c++11 -Iobjs/ -O3 -Wall -c -o objs/simple.o simple.cpp
+Makefile:24: recipe for target 'objs/simple.o' failed

@@ -84,21 +84,21 @@ def my_plot(x, actual, approximation, abs_errors, allowed_error, ap):
 # basis is a string specifying your basis. function is the given function to interpolate
 # allowed error is the maximum relative error allowed on the entire interval.
 def demo_adapt(function, order, allowed_error, basis,
-               adapt_type="Trivial", accurate=True, animate=False, a=0, b=10):
+               adapt_type="Trivial", accurate=True, animate=False, a=0, b=10, opt=[]):
 
     print("Creating Interpolant")
     my_approx = adapt_i.make_interpolant(a, b, function, order, 
-                            allowed_error, basis, adapt_type, '32', accurate)
-
+                            allowed_error, basis, adapt_type, '32', accurate, optimizations=opt)
     print("\nGenerated Code:\n")
-    adapt_i.generate_code(my_approx)
+    N = 2**10
+    adapt_i.generate_code(my_approx, size=N, cpu=True)
     print(my_approx.code)
     print("Evaluating Interpolant")
-    x = np.linspace(a, b, 1e3, dtype=np.float64)
+    x = np.linspace(a, b, N, dtype=np.float64)
     if with_pyopencl and False: 
         est = adapt_i.run_approximation(x, my_approx)
     else: 
-        est = my_approx.evaluate(x)
+        est = my_approx.evaluate_tree(x)
     print("Evaluating Function")
     true = function(x)
     print("Plotting")
@@ -174,5 +174,6 @@ def main_demo():
 # run the main program
 if __name__ == "__main__":
     #main_demo()
-    demo_adapt(f1, 4, .4, 'chebyshev', accurate=False, animate=True, b=5)
+    opt = ["arrays", "map"]
+    demo_adapt(f, 5, 1e-3, 'chebyshev', accurate=False, b=10, opt=opt)
 

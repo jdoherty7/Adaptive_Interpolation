@@ -1,8 +1,6 @@
 """
 Script used to test the adaptive interpolation and
 the evaluation of said interpolant
-
-This is now faster than default bessel approximation!
 """
 from __future__ import absolute_import
 
