@@ -30,8 +30,8 @@ class Node:
         self.parent = parent
         self.left = left
         self.right = right
+        self.level = -1
         self.level = self.get_level()
-        self.saved = -1
         self.data = 0
         if left != 0:
             left.parent = self
@@ -39,12 +39,12 @@ class Node:
             left.parent = self
 
     def get_level(self):
-        if self.saved == -1:
+        if self.level == -1:
             if (self.parent == 0):
-                self.saved = 0
+                self.level = 0
             else:
-                self.saved = self.parent.level + 1
-        return self.saved
+                self.level = self.parent.level + 1
+        return self.level
 
 
 class Interpolant(object):
@@ -119,7 +119,7 @@ class Interpolant(object):
                 C.append(self.dtype(2)*self.dtype(x)*C[i-1] - C[i-2])
             return np.array(C, dtype=self.dtype)
 
-    # transformation for othroganal functions, from [a, b] -> [-1, 1]
+    # transformation for orthogonal functions, from [a, b] -> [-1, 1]
     def transform(self, x, a, b):
         scale = (x - a)/(b - a)
         return 2*scale - 1

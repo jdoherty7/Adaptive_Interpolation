@@ -204,6 +204,8 @@ def gen_ispc(ap):
 
     if "arrays" in ap.optimizations or "map" in ap.optimizations:
         interval_a_index, interval_b_index, left_index, right_index, coeff_index = ['']*5
+        # change from two arrays for a and b to one
+        interval_a_index, interval_b_index = '', 1
     elif "trim_data" in ap.optimizations:
         interval_a_index = order+4
         interval_b_index = order+5
@@ -221,8 +223,11 @@ def gen_ispc(ap):
         left = "left"
         right = "right"
         mid = "mid"
-        interval_a = "interval_a"
-        interval_b = "interval_b"
+        # using two arrays for a and b
+        #interval_a = "interval_a"
+        #interval_b = "interval_b"
+        interval_a = "intervals"
+        interval_b = "intervals"
         coeff = "coeff"
     else:
         # set all variables to the string "tree"
@@ -231,7 +236,13 @@ def gen_ispc(ap):
 
 
     vtype = "varying " if vec else "uniform "
-    string = "\n"+vtype + ap.dtype_name + " T0, T1, Tn, a, b, s, x_scaled, xn;\n"
+    string = "\n"
+    for var in ["T0", "T1", "Tn", "a", "b", "s", "x_scaled", "xn"]:
+        string += vtype + ap.dtype_name + " " +var + " = 0;\n"
+    if "output" not in ap.optimizations:
+        string += vtype + ap.dtype_name + " y = 0;\n"
+
+
     if vec:
         string += "for (uniform int nbase=0; nbase<" + repr(int(ap.size))
         string += "; nbase+=programCount) {\n\n"
@@ -257,13 +268,21 @@ def gen_ispc(ap):
 
     # gives the index of the coefficients to use
     # long long is int64 in ispc
+    string += vtype + "int index = 0;\n"
+
     if "calc intervals" in ap.optimizations:
-        string += vtype + "int index, l, L;\n"
+        string += vtype + "int l = 0;\n"
+        string += vtype + "int L = 0;\n"
         ty = "int" if (2*ap.D + ap.lgD) < 32 else "int64"
-        string += vtype + ty + " data;\n"
+        string += vtype + ty + " data = 0;\n"
+
+    
+    if "output" in ap.optimizations:
+        string += "xn = x[n];\n"
     else:
-        string += vtype + "int index;\n"
-    string += "xn = x[n];\n"
+        # equispaced points in [a, b)
+        string += "xn = {0} + n*{1:.90f};\n".format(ap.lower_bound, (ap.upper_bound - ap.lower_bound-.01)/(ap.size+1))
+
 
     if "test second loop" in ap.optimizations:
         intro = string
@@ -279,7 +298,8 @@ def gen_ispc(ap):
             string += "data = "
         else:
             string += "index = "
-        string += "f[(int)((xn - {0})*{1})];\n".format(ap.lower_bound, N/(ap.upper_bound - ap.lower_bound))
+        string += "f[(int)({0}*xn - {1})];\n".format(N/(ap.upper_bound - ap.lower_bound), 
+                                            ap.lower_bound*N/(ap.upper_bound - ap.lower_bound) )
         
     else:
         if "unroll" in ap.optimizations:
@@ -298,10 +318,16 @@ def gen_ispc(ap):
     # used for testing performance of JUST the first or second loop
     # by removing the other loop from the generated code
     if "test first loop" in ap.optimizations:
-        string += "y[n] = (float)index;\n}\n"
+        if "output" in ap.optimizations:
+            string += "y[n] = s;\n}\n"
+        else:
+            string += "y = s;\n}\n"
+            #string += "uniform "+ap.dtype_name + " ret = extract(y, 0);\n"
+            string += "ret[0] = extract(y, 0);\n"
         string = string.replace("varying int i=", "uniform int i=")
         string = string.replace("varying int j=", "uniform int j=")
         return string
+    
     if "test second loop" in ap.optimizations:
         string = ""
 
@@ -311,8 +337,10 @@ def gen_ispc(ap):
         string += "L = (data >> {0});// & {1};\n".format(2*ap.num_levels, hex(ap.lgD_ones))
         string += "index = data & {0};\n".format(hex(ap.D_ones))
         scaling = (ap.upper_bound -  ap.lower_bound) / len(ap.map)
-        string += "a = {0} * ({1})l + {2};\n".format(scaling, ap.dtype_name, ap.lower_bound)
-        string += "b = {0} * ({1})(l+L) + {2};\n".format(scaling, ap.dtype_name, ap.lower_bound)
+        
+        op = "+" if ap.lower_bound >=0 else "-"
+        string += "a = {0} * ({1})l {2} {3};\n".format(scaling, ap.dtype_name, op, abs(ap.lower_bound))
+        string += "b = {0} * ({1})(l+L) {2} {3};\n".format(scaling, ap.dtype_name, op, abs(ap.lower_bound))
         # this works, but id like to do the division while generating. probably can't because
         # the operations are not commutative. Or it might be because L isnt actually converted
         # to double before dividing even though I do the cast...
@@ -331,7 +359,8 @@ def gen_ispc(ap):
     # initialize the sum
     string += "s = {0}[index+{1}]*T0;\n".format(coeff, coeff_index)
     if "arrays" in ap.optimizations:
-        string = string.replace("index+", "index")
+        string = string.replace("index+]", "index]")
+        #string = string.replace("index+", "index")
     coeff_index = 0 if coeff_index == '' else coeff_index
     if order > 0:
         string += "T1 = x_scaled;\n"
@@ -357,8 +386,13 @@ def gen_ispc(ap):
             string += "\tT1 = Tn;\n"
             string += "}\n"
 
+    if "output" in ap.optimizations:
+        string += "y[n] = s;\n}\n"
+    else:
+        string += "y = y + s;\n}\n"
+        #string += "uniform "+ap.dtype_name + " ret = extract(y, 0);\n"
+        string += "ret[0] = extract(y, 0);\n"
 
-    string += "y[n] = s;\n}\n"
     if "test second loop" in ap.optimizations:
         string = intro + string
     string = string.replace("varying int i=", "uniform int i=")
@@ -385,8 +419,9 @@ def build_code(approx, ispc=False):
         # used if generating code for c++ 
         #header = 'extern "C" void eval('
         if "calc intervals" not in approx.optimizations:
-            header += "const " + vtype + dt + " interval_a[], "
-            header += "const " + vtype + dt + " interval_b[], "
+            header += "const " + vtype + dt + " intervals[], "
+            #header += "const " + vtype + dt + " interval_a[], "
+            #header += "const " + vtype + dt + " interval_b[], "
         
         header += "const " + vtype + dt + " coeff[], "
         if "map" in approx.optimizations:
@@ -398,12 +433,16 @@ def build_code(approx, ispc=False):
                     fdt = "int64"
             else:
                 fdt = "int"
-            header += "const " + vtype + fdt + " f[], "
+            header += "const " + vtype + fdt + " f[]"
+    
+        if "output" in approx.optimizations:
+            header += ", const "+vtype + dt + " x[], " + vtype + dt + " y[]"
+        else:
+            header += ", "+vtype + dt + " ret[]"
 
-        header += "const "+vtype + dt + " x[], " + vtype + dt + " y[])"
 
         code = approx.code.replace("\n", "\n\t")
-        kernal = header + "{\n\n" + code + "\n}"
+        kernal = header + "){\n\n" + code + "\n}"
 
         return kernal
 

@@ -186,6 +186,7 @@ def run(approx, code, size, NRUNS, vec):
         # -march g++ cpu flag causes vectorization of scalar code, but this
         # is the family that the cpu is so will it be auto vectorized anyways on dunkel?
         # when running the compilar on my own it seems like it isnt..
+        home = os.path.expanduser("~")
         build_ispc_shared_lib(
                 tmpdir,
                 [("stream.ispc", code)],
@@ -205,7 +206,7 @@ def run(approx, code, size, NRUNS, vec):
                     "--woff",
                     #"--opt=disable-loop-unroll",
                     "--cpu=core-avx2",
-                    "--target=avx2-i32x8",
+                    "--target=avx2-i32x16",
                     ]
                     #+ (["--opt=disable-loop-unroll"] if "unroll" in approx.optimizations 
                     #                                 or "unroll_order" in approx.optimizations else [])
@@ -213,24 +214,35 @@ def run(approx, code, size, NRUNS, vec):
                     # only need to use if accessing more than 4 GB of information?
                     + (["--addressing=32"])
                     ),
-                ispc_bin= "/home/ubuntu-boot/Desktop/ispc-v1.9.1-linux/ispc",
+                ispc_bin= home+"/Desktop/ispc-v1.9.1-linux/ispc",
                 )
-
+        if 1:
+            #os.system("ls "+tmpdir)
+            os.system("cd "+tmpdir+" && objdump -S ispc.o > ispc.s")
+            #os.system("ls "+tmpdir)
+            with open(tmpdir +"/ispc.s", 'r') as asm:
+                assembly = asm.readlines()
+                with open(home+"/the_assembly.txt", 'w') as asm_file:
+                    asm_file.write("\n".join(assembly))
+            
         dt = approx.dtype
-        x = np.linspace(approx.lower_bound,
-                        #1.1,
-                        approx.upper_bound, 
-                        size,
-                        endpoint=False,
-                        dtype=dt)
-        if "random" in approx.optimizations:
-            np.random.shuffle(x)
+        if "output" in approx.optimizations:
+            x = np.linspace(approx.lower_bound,
+                            #1.1,
+                            approx.upper_bound, 
+                            size,
+                            endpoint=False,
+                            dtype=dt)
+            if "random" in approx.optimizations:
+                np.random.shuffle(x)
 
-        # make sure that these are already numpy arrays of the correct type..
-        y = np.zeros(size, dtype=dt)
+            # make sure that these are already numpy arrays of the correct type..
+            y = np.zeros(size, dtype=dt)
+
         approx.tree_1d    = np.array(approx.tree_1d, dtype=dt)
         approx.interval_a = np.array(approx.interval_a, dtype=dt)
         approx.interval_b = np.array(approx.interval_b, dtype=dt)
+        approx.intervals  = np.array(approx.intervals, dtype=dt)
         approx.coeff      = np.array(approx.coeff, dtype=dt)
 
 
@@ -240,24 +252,24 @@ def run(approx, code, size, NRUNS, vec):
         if 'map' in approx.optimizations:
             if "calc intervals" in approx.optimizations:
                 args = [cptr_from_numpy(approx.coeff),
-                        cptr_from_numpy(approx.cmap),
-                        cptr_from_numpy(x),
-                        cptr_from_numpy(y),
-                    ]
+                        cptr_from_numpy(approx.cmap)]
             else:
-                args = [cptr_from_numpy(approx.interval_a),
-                        cptr_from_numpy(approx.interval_b),
+                args = [#cptr_from_numpy(approx.interval_a),
+                        #cptr_from_numpy(approx.interval_b),
+                        cptr_from_numpy(approx.intervals),                        
                         cptr_from_numpy(approx.coeff),
-                        cptr_from_numpy(approx.map),
-                        cptr_from_numpy(x),
-                        cptr_from_numpy(y),
-                        ]
+                        cptr_from_numpy(approx.map)]
         else:
             # evaluating using BST for interval search
-            args = [cptr_from_numpy(approx.tree_1d),
-                    cptr_from_numpy(x),
-                    cptr_from_numpy(y),
-                    ]
+            args = [cptr_from_numpy(approx.tree_1d)]
+        
+        if "output" in approx.optimizations:
+            args.append(cptr_from_numpy(x))
+            args.append(cptr_from_numpy(y))
+        else:
+            ret = np.zeros((2,))
+            retc = cptr_from_numpy(ret)
+            args.append(retc)
     
         # run before instantiating too??
         for i in range(2):
@@ -277,7 +289,7 @@ def run(approx, code, size, NRUNS, vec):
                 plt.title("Function")
                 plt.scatter(x[::s], y[::s])
                 plt.show()
-            if 1:
+            if 0:
                 plt.figure()
                 plt.title("Absolute Error")
                 plt.yscale("log")
@@ -296,37 +308,80 @@ def run(approx, code, size, NRUNS, vec):
         d = 4 if approx.cmap.dtype == np.int32 else 8
         if "calc intervals" in approx.optimizations:
             # without the interval storage
-            FLOPS  =  2 + 2 + 5 + 1 + 4*approx.max_order
-            memops = (3 +   approx.max_order)*nbytes + d
+            # flops = map + get_data + transform + indexscale + eval
+            # flops = 2   + 4        + 5         + 1          + 4*order
+            # memops = (3 +   approx.max_order)*nbytes + d
+
+            # below is number that was tested with
+            #FLOPS  =  2 + 2 + 5 + 1 + 4*approx.max_order
+            # should have been this though..
+            FLOPS  =  2 + 4 + 5 + 1 + 4*approx.max_order
+            memops = (2 + approx.max_order)
+            Bytes = approx.coeff.nbytes + approx.cmap.nbytes
+            #Bytes = (1 + approx.max_order)*nbytes + d
         else:
-            # with the interval storage
+            # with the interval storage, was 5 +
             FLOPS  =  2 + 5 + 1 + 4*approx.max_order
-            memops = (5 +   approx.max_order)*nbytes + d
+            memops = (3 + (1 + approx.max_order))
+            Bytes = approx.coeff.nbytes + approx.map.nbytes + approx.intervals.nbytes
+            #Bytes = (2 + (1 + approx.max_order))*nbytes + d
 
         # mem reciprocal throughput of instruction between 7 and 12
         print("Average Runtime (ns) per x:", (1e9)*elapsed/NRUNS/size)
         # times size*4 because thats the number of bytes in x
-        avgtime = elapsed/NRUNS
-        GFLOPS = (FLOPS/avgtime )*(size/(10**9))#(2**30)
-        MEMBND = (memops/avgtime)*(size/(10**9))
+        # GigaByte is 10^9 Bytes
 
+        # calculate the predicted values
+        mc = 6.5 if approx.dtype_name == "float" else 5.5
+        fc = .5
+        freq = 2.2
         vw = 8 if approx.dtype_name == "float" else 4 # for double, non-turbo
+
+        # rutime is cycles
+        predictedruntime = fc*FLOPS+mc*memops
+        predictedGFLOPS  = vw*8.8#vw*FLOPS*freq/predictedruntime
+        predictedMB      = vw*Bytes*freq/predictedruntime
+
+        # calculate the actual
+        avgtime = elapsed/NRUNS
+        GFLOPS  = (FLOPS/avgtime)*(size/(10**9))#(2**30)
+        MEMBND  = (Bytes/avgtime)*(1./(10**9))
+
         peakGF = 8.8*vw
-        peakMB = 10.88#76.8
+        #peakMB = 76.8
+        peakMB = 10.88
 
+        latency = (vw*avgtime/size)*10**9
         #print("Flops/Byte: ", (FLOPS/avgtime)/(memops*size))
-        print("GFLOPS/s:   ", GFLOPS, " (Max = "+str(peakGF)+") ", GFLOPS/peakGF)
-        print("MB (GB/s):  ", MEMBND, " (Max = "+str(peakMB)+" GB/s) ", MEMBND/peakMB)
-        print("Total Use:  ", (GFLOPS/peakGF) + (MEMBND/peakMB))
-        s = 2048
-        z = f(x[::s])
-        a = la.norm(z-y[::s], np.inf)
-        r = a/la.norm(z, np.inf)
-        #if r > approx.allowed_error:
-        print("Relative Error:", r)
-        print("Absolute Error:", a)
+        print(avgtime, predictedruntime)
+        print()
+        print("Latency (ns):   ", latency)
+        print("KiloBytes   :   ", Bytes/(10**3))
 
-        return GFLOPS, avgtime/size
+        
+        print("Pred GFLOPS/s:  ", predictedGFLOPS)
+        print("Pred MB (GB/s): ", predictedMB)
+        print()
+        print("GFLOPS/s:       ", GFLOPS, " (Max = "+str(peakGF)+") ", GFLOPS/peakGF)
+        print("MB (GB/s):      ", MEMBND, " (Max = "+str(peakMB)+" GB/s) ", MEMBND/peakMB)
+        #print("Total Use:      ", (GFLOPS/peakGF) + (MEMBND/peakMB))
+        if "output" in approx.optimizations:
+            s = 2048
+            z = f(x[::s])
+            a = la.norm(z-y[::s], np.inf)
+            r = a/la.norm(z, np.inf)
+            #if r > approx.allowed_error:
+            print("Relative Error:", r)
+            print("Absolute Error:", a)
+        else:
+            x = np.linspace(approx.lower_bound, approx.upper_bound, size, endpoint=False)[::vw]
+            y = f(x)
+            ysum = np.sum(y)
+            print(ysum)
+            print(ret[0])
+            print(np.abs(ysum - ret[0]))
+
+        return GFLOPS, MEMBND, latency
 
 
 
@@ -339,57 +394,64 @@ def run_one(approx, size, num_samples, opt=[]):
     pre_header_code = adapt_i.generate_code(approx, size=size, vector_width=8, cpu=True)
     ispc_code       = generate.build_code(approx, ispc=True)
 
-    # Bytes of floating point type used
+    # Bytes of floating point type used, not including x and y
     #######################################################
     f = 4 if approx.dtype_name == "float" else 8
     L, s = approx.leaf_index + 1, len(approx.map)
     d = 4 if approx.cmap.dtype == np.float32 else 8
     if "calc intervals" in approx.optimizations:
-        STORAGE = (s*(d/f) + 2*size + approx.max_order*L)*f
+        STORAGE = (s*(d/f) + approx.max_order*L)*f
     else:
-        STORAGE = (s + 2*size + (approx.max_order + 2)*L)*f
-    STORAGE = STORAGE / 2**30
-    print("Space Complexity: ", STORAGE, " GB")
-    print("(Store - Calculate) = ", s*f*(1 + 2*(L/s) - d/f))
+        STORAGE = (s + (approx.max_order + 2)*L)*f
+    STORAGE = STORAGE / (2**10) # convert to GB
+
+    print("L, Tree Depth, L/Map Size: ", L, approx.num_levels-1, L/s)
 
     if "verbose" in opt:
+        print("Space Complexity: ", STORAGE, " kB")
+        print("(Store [a,b] - Calculate [a,b]) = ", s*f*(1 + 2*(L/s) - d/f)/(2**10))
         print("L, Map size, L/Map Size: ", L, s, L/s)
         print()
         print(ispc_code)
     #####################################################
     #print(ispc_code)
-    GFLOPS, t = run(approx, ispc_code, size, num_samples, True)
-
+    print(approx.lower_bound, approx.upper_bound)
+    GFLOPS, MEMBND, latency = run(approx, ispc_code, size, num_samples, True)
 
     print()
 
-    return STORAGE, GFLOPS
+    return GFLOPS, MEMBND, latency
 
 
 def test(a, b, orders, precisions):
     # Function used to obtain results. DONT CHANGE
-    size, num_samples = 2**26, 50
-    opt = ["arrays", "map", "random"]
+    size, num_samples = 2**27, 1
+    baseopt = ["arrays", "map", "random"]
+    opts = [[], ["calc intervals"]]#, ["scalar"], ["scalar", "calc intervals"]]
+    stable = {}
+    dtable = {}
     for precision in precisions:
+        stable[precision] = []
+        dtable[precision] = []
         for order in orders:
             print(order, precision)
             if precision > 1e-7:
                 name = "./approximations/32o" + str(order) + "-p" + str(precision)
                 approx = adapt_i.load_from_file(name)
                 print(name)
-                run_one(approx, size, num_samples, opt)
-                #run_one(approx, size, num_samples, opt + ["scalar"])
-                run_one(approx, size, num_samples, opt + ["calc intervals"])
-                #run_one(approx, size, num_samples, opt + ["scalar", "calc intervals"])
-
+                for opt in opts:
+                    run_one(approx, size, 1, baseopt+opt+["output"])
+                    c = run_one(approx, size, num_samples, baseopt + opt)
+                    stable[precision].append((order, opt, c))
+                
 
             name = "./approximations/64o" + str(order) + "-p" + str(precision)
             approx = adapt_i.load_from_file(name)
             print(name)
-            run_one(approx, size, num_samples, opt)
-            #run_one(approx, size, num_samples, opt + ["scalar"])
-            run_one(approx, size, num_samples, opt + ["calc intervals"])
-            #run_one(approx, size, num_samples, opt + ["scalar", "calc intervals"])
+            for opt in opts:
+                run_one(approx, size, 1, baseopt+opt+["output"])
+                c = run_one(approx, size, num_samples, baseopt + opt)
+                dtable[precision].append((order, opt, c))
 
 
 
@@ -473,8 +535,8 @@ def scalar_test():
     # 2**20 is better but 2**26 guarentees its good
     # takes long enough for the measurement to make sense.
     a, b = 1, 21
-    order, precision = 3, 1e-3#np.finfo(np.float32).eps*10
-    size, num_samples = 2**25, 50
+    order, precision = 3, np.finfo(np.float32).eps*10
+    size, num_samples = 2**23, 50
     d = 32
     opt = ["arrays", "map", "random"]
     approx = adapt_i.make_interpolant(a, b, f, order, 
@@ -482,7 +544,6 @@ def scalar_test():
                                       'chebyshev', 
                                       dtype=d, 
                                       optimizations=opt)
-
     run_one(approx, size, num_samples, opt=opt + ["calc intervals"])
     run_one(approx, size, num_samples, opt=opt)
     # scalar does something incorrect? oh.. data race?
@@ -506,13 +567,18 @@ if __name__ == "__main__":
     # maybe im using the wrong dtype somewhere?
     # its actually not. The scaling/L is imprecise for some reason..
     #2/(b-a) is accurate though.. at least I figured it out...
-    if 1:
-        order, num_samples = 3, 5
+    if 0:
+        order, num_samples = 3, 10
+        a, b = -3, 23
+
         size = 2**23
-        precision = 100*np.finfo(np.float64).eps
-        opt = ["arrays", "map", "graph"]
-        name = "./approximations/64o" + str(order) + "-p" + str(precision)
-        approx = adapt_i.load_from_file(name)
+        precision = 90000*np.finfo(np.float32).eps
+        opt = ["arrays", "map", "verbose"]
+        #name = "./approximations/64o" + str(order) + "-p" + str(precision)
+        #approx = adapt_i.load_from_file(name)
+        approx = adapt_i.make_interpolant(a, b, f, order, 
+                                          precision, 'chebyshev', 
+                                          dtype=64, optimizations=opt)
         print(2*approx.D + approx.lgD)
         scaling = (approx.upper_bound -  approx.lower_bound) / len(approx.map)
         c = list(map(lambda x: (int(     bin(x)[           :-2*approx.D], 2),
@@ -538,15 +604,13 @@ if __name__ == "__main__":
         #print(approx.interval_b)
         print(precision)
         run_one(approx, size, num_samples, opt)
-        run_one(approx, size, num_samples, opt + ["scalar"])
         run_one(approx, size, num_samples, opt + ["calc intervals"])
-        run_one(approx, size, num_samples, opt + ["scalar", "calc intervals"])
 
-    if 0:
+    if 1:
         a, b = 1, 21
-        orders = [5,3]
-        precisions = [100*np.finfo(np.float32).eps, 100*np.finfo(np.float64).eps]
-        #save_approximations(a, b, orders, precisions)
-        test(a, b, orders, precisions)
-
+        orders = [3]
+        precisions = [10*np.finfo(np.float32).eps, 100*np.finfo(np.float64).eps]
+        save_approximations(a, b, orders, precisions)
+        #test(a, b, orders, precisions)
+        #save_test()
 

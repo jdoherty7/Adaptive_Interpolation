@@ -20,7 +20,7 @@ import numpy as np
 class Approximator(object):
 
     def __init__(self, my_adapt=None, optimizations=[]):
-        print("Building Approximator")
+        #print("Building Approximator")
         if my_adapt != None:
             # raw array data from adaptive interpolation method
             self.basis_function = my_adapt.basis_function
@@ -95,6 +95,8 @@ class Approximator(object):
             #print(len(self.coeff), len(self.map))
             #print(self.map[int(3*1.6)], self.map[int(20*1.6)])
             #print(self.map[int(3*1.6)] & 2**20 -1, int(19*1.6))
+            self.intervals = self.interval_a + [self.interval_b[-1]]
+            assert len(self.intervals) == len(self.interval_a) + 1
             if "verbose" in self.optimizations:
                 print("Map: ", self.leaf_index+1, self.map)
                 print("A: ", self.interval_a)
@@ -151,8 +153,8 @@ class Approximator(object):
 
 
     def store_interval_info_in_map(self, node):
-        # root is D=0
-        D = self.tree.max_level
+        # root is D=0, this should not have +1 but without not high enough. something wrong somewhere else
+        D = self.tree.max_level+1
         lgD = int(np.log2(D))+1
         dt = np.int32 if (2*D + lgD) < 32 else np.int64
         self.D = D
@@ -278,7 +280,7 @@ class Approximator(object):
             coeff_index = 1
             interval_index = self.max_order + 2
             child_index = self.max_order + 4
-        print(self.tree_1d)
+        #print(self.tree_1d)
         for xn in x:
             index = 0
             for i in range(1, self.num_levels):
